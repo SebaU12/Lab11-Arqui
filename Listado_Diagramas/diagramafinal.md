@@ -113,15 +113,15 @@ subgraph OBSERVACION["OBSERVABILIDAD MINIMA - SIN MICROSERVICIO NUEVO"]
 end
 
 subgraph EXTERNOS["SISTEMAS Y RECURSOS EXTERNOS"]
-  IDP["IDENTITY PROVIDER - Identidad institucional"]
+  IDP["IDENTITY PROVIDER<br/>&lt;&lt;spof&gt;&gt;<br/>Identidad institucional - login y alta"]
   GH["GITHUB - Codigo por commit SHA"]
-  IMG["IMAGE REGISTRY - Bases por curso 3-5 GB - BOTTLENECK descargas en picos"]
+  IMG["IMAGE REGISTRY<br/>&lt;&lt;bottleneck&gt;&gt;<br/>Imagenes 3-5 GB - descargas masivas"]
   IMGCACHE[("CACHE-ASIDE - WORKER IMAGE CACHE - por hash / version; miss al registry")]
-  AWS["AWS EC2 SPOT - Solo Spot; CPU/GPU diversificados - BOTTLENECK capacidad GPU escasa"]
+  AWS["AWS EC2 SPOT - CPU / GPU<br/>&lt;&lt;bottleneck&gt;&gt;<br/>GPU escasa; solo Spot; capacidad no garantizada"]
   MICRO["MICROVM SANDBOX - Codigo no confiable"]
-  LLM["EXTERNAL LLM PROVIDER - BOTTLENECK cuotas / concurrencia - Skill activity-draft-v1"]
+  LLM["EXTERNAL LLM PROVIDER<br/>&lt;&lt;bottleneck&gt;&gt;<br/>Cuotas y concurrencia - skill activity-draft-v1"]
   PUSH["EXTERNAL PUSH PROVIDER"]
-  OLD["LEGACY ARCHITECTURE SYSTEM - POTENTIAL SPOF de cursos no migrados"]
+  OLD["LEGACY ARCHITECTURE SYSTEM<br/>&lt;&lt;spof&gt;&gt;<br/>Fuente unica de cursos aun no migrados"]
   IDPCB["CIRCUIT BREAKER IDP - cortar dependencia ante falla, no omitir autenticacion"]
   LLMCB["CIRCUIT BREAKER LLM - fallar controlado y conservar reserva"]
   GITHUBCB["CIRCUIT BREAKER GitHub - suspender resolucion sin aceptar SHA sin respaldo"]
@@ -261,8 +261,8 @@ LEG -. "cumple" .-> RF6
 
 subgraph GUIA["LEYENDA DE VALIDACION"]
   LCRIT["CRITICAL PATH - ROJO: recepcion, cola, ejecucion, nota oficial"]
-  LSPOF["SPOF POTENCIAL - NARANJA: dependencia singular externa"]
-  LBN["BOTTLENECK - AMARILLO: recurso escaso o descarga pesada"]
+  LSPOF["&lt;&lt;spof&gt;&gt; - NARANJA: dependencia singular externa"]
+  LBN["&lt;&lt;bottleneck&gt;&gt; - AMARILLO: recurso escaso o descarga pesada"]
   LPAT["PATRON - AZUL: Strangler / Cache-Aside / Replicas"]
 end
 classDef critical fill:#ffe0e0,stroke:#b71c1c,stroke-width:3px,color:#222;
