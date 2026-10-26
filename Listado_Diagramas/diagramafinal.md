@@ -1,4 +1,9 @@
+```mermaid
 graph LR
+%% SPOTTY - TERCERA ITERACION: RELIABILITY + SCALABILITY SELECTIVA
+%% 16 servicios, almacenamiento logico y solo mecanismos con ROI relevante.
+%% Servicios logicos NO implican despliegues independientes. Colas son recursos logicos.
+
 subgraph CLIENTES["ACTORES Y ENTRADA"]
   PROF["PROFESOR - Web desktop"]
   EST["ESTUDIANTE - Mobile"]
@@ -115,6 +120,7 @@ subgraph EXTERNOS["SISTEMAS Y RECURSOS EXTERNOS"]
   IMGCACHE -->|"Preparar microVM"| MICRO
 end
 
+%% ENTRADA Y CONTROL DE ACCESO
 GW -->|"POST /auth/login; /auth/logout"| AUTH
 AUTH -->|"Verificar identidad"| IDP
 AUTH -->|"Matricula / profesor asignado"| COURSE
@@ -129,6 +135,7 @@ COURSE -->|"Curso y vinculacion"| ACT
 ACT -->|"Configuracion y deadline"| SUB
 AUTH -->|"Permisos academicos"| REVIEW
 
+%% CHAT DOCENTE: PROPONE, NO PUBLICA
 CHAT -->|"Profesor / curso autorizado"| AUTH
 CHAT -->|"Reserva para generacion y refinamiento"| TOKEN
 CHAT -->|"Generar/refinar propuesta"| LLMA
@@ -136,12 +143,14 @@ LLMA -->|"Propuesta estructurada"| CHAT
 CHAT -->|"Propuesta y confirmacion docente"| ACT
 ACT -->|"Nueva rubrica: solicitar recalificacion"| ORQ
 
+%% ENTREGA: SHA, ULTIMA VALIDA Y ADMISION ASINCRONA
 SUB -->|"Resolver commit inmutable"| GH
 SUB -->|"Verificar matricula"| COURSE
 SUB -->|"Entrega vigente / reentrega / reemplazo"| ORQ
 ORQ -->|"Consultar entrega y version"| SUB
 ORQ -->|"Consultar rubrica versionada"| ACT
 
+%% ORQUESTACION - PLANIFICACION - CAPACIDAD
 ORQ -->|"Encolar evaluacion autorizada / recuperar"| SCHED
 SCHED -->|"Perfil CPU / GPU y demanda"| CAP
 CAP -->|"Solicitar, registrar o liberar capacidad"| AWS
@@ -152,6 +161,7 @@ SCHED -->|"Despachar al worker compatible"| EXEC
 CAP -->|"Aviso de interrupcion o perdida"| ORQ
 CAP -->|"Instancia no asignable"| SCHED
 
+%% EJECUCION SEGURA - CHECKPOINTS - RESULTADO
 EXEC -->|"Recuperar codigo SHA"| GH
 EXEC -->|"Imagen versionada por curso"| IMG
 EXEC -->|"Ejecutar con limites CPU/GPU/RAM/tiempo"| MICRO
@@ -167,12 +177,14 @@ GRADE -->|"Provisional, confianza, inconcluso"| REVIEW
 REVIEW -->|"Consultar intento y vigencia"| ORQ
 REVIEW -->|"Verificar ultimo SHA"| SUB
 
+%% PRESUPUESTO LLM: IDENTIDAD LOGICA SE CONSERVA ENTRE INTENTOS
 EXEC -->|"Reserva para evaluacion logica"| TOKEN
 EXEC -->|"Analisis LLM autorizado"| LLMA
 LLMA -->|"Verificar reserva y conciliar uso"| TOKEN
 LLMA -->|"Skill/modelo y resultado"| LLM
 TOKEN -->|"Evaluation ID persiste entre intentos"| ORQ
 
+%% EVENTOS ACADEMICOS Y ALERTAS
 ORQ -->|"Estados relevantes"| NOTIF
 REVIEW -->|"Nota ya publicada"| NOTIF
 SCHED -->|"Cola / espera / riesgo 48h"| NOTIF
@@ -180,6 +192,7 @@ CAP -->|"Escasez CPU/GPU"| NOTIF
 NOTIF -->|"Push a destinatarios autorizados"| PUSH
 NOTIF -->|"Roles y matriculas"| COURSE
 
+%% OBSERVABILIDAD: SOLO FLUJOS CRITICOS, NO CADA ENDPOINT
 GW -->|"P95 admision y consulta"| TEL
 SCHED -->|"Edad y profundidad de colas"| TEL
 CAP -->|"Capacidad Spot real y memoria"| TEL
@@ -187,9 +200,22 @@ ORQ -->|"Intentos invalidos y recuperaciones"| TEL
 TOKEN -->|"Consumo LLM y costo"| TEL
 REVIEW -->|"Tiempo hasta publicacion 48h"| TEL
 
+%% COMPATIBILIDAD LEGACY - UN PROPIETARIO POR CURSO/COHORTE
 LEG -->|"Resolver propietario y mapeos"| COURSE
 LEG -->|"Ruta legacy para no migrados"| OLD
 LEG -->|"Entregas de cursos migrados"| SUB
 LEG -->|"Resultados publicados migrados"| REVIEW
 LEG -->|"Estado de evaluacion migrada"| ORQ
+
+%% FITNESSES / UMBRALES PARA VALIDAR EN LA REVISION:
+%% 960 entregas/30 min (stress 4800); API P95 entrega <= 2s.
+%% CPU wait >5m, GPU wait >15m; RAM >75% por 3m; revisar cada 60s.
+%% Pool activo: min 2 deseado, max 12 CPU / 6 GPU; Spot puede entregar 0.
+%% Interrupcion Spot ~2m, objetivo de guardar progreso <=90s.
+%% Heartbeat 15s, sospechoso 60s, reemplazo 120s tras invalidar lease.
+%% Deadline calificacion 48h; costo Spot presupuestado 1500 USD/mes.
+%% Los patrones NO incluidos (LB dedicado, cache API, CB en cada enlace)
+%% no se justifican por la demanda observada y agregarian complejidad.
+%% RF-011 historial visible y RF-040/044/045 funciones avanzadas son Nice to Have.
+```
 
