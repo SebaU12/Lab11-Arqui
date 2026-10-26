@@ -1,0 +1,193 @@
+graph LR
+
+PROF["PROFESOR - Recibe alertas - Consulta notificaciones"]
+
+EST["ESTUDIANTE - Recibe cambios de estado - Consulta notas publicadas"]
+
+GW["SPOTTY ENTRY - Web docente - Mobile estudiante"]
+
+NOTIF["NOTIFICATION SERVICE - Recibe eventos - Determina destinatarios - Valida visibilidad - Construye mensajes - Registra notificaciones - Solicita entrega push"]
+
+AUTH["ACCESS SERVICE - Identidad - Usuarios - Autorizacion"]
+
+COURSE["COURSE SERVICE - Matriculas - Profesores asignados"]
+
+ORQ["EVALUATION ORCHESTRATOR - Estados de evaluacion - Cambios de progreso"]
+
+GRADE["GRADE REVIEW SERVICE - Publicacion de notas oficiales"]
+
+SCHED["EVALUATION SCHEDULER - Colas - Espera estimada - Riesgo de plazo"]
+
+CAP["SPOT CAPACITY SERVICE - Escasez CPU GPU - Capacidad disponible"]
+
+PUSH["EXTERNAL PUSH PROVIDER - Envio de notificaciones - Dispositivos registrados"]
+
+DB[("NOTIFICATION STORE - Eventos recibidos - Destinatarios - Mensajes - Estado de entrega - Referencia academica")]
+
+DEVICE[("DEVICE REGISTRATION STORE - Usuario - Dispositivo - Push token - Plataforma - Estado de suscripcion")]
+
+R1["POST /notifications/events
+Body
+{
+ event_id: EVT-101
+ event_type: EVALUATION_COMPLETED
+ evaluation_id: EVAL-101
+}"]
+
+R2["POST /notifications/grade-published
+Body
+{
+ event_id: EVT-102
+ activity_id: ACT-101
+ student_id: E-205
+ grade_version: 2
+}"]
+
+R3["POST /notifications/deadline-risk
+Body
+{
+ event_id: EVT-103
+ course_id: COURSE-101
+ activity_id: ACT-101
+ risk_type: GRADING_48H
+}"]
+
+R4["POST /notifications/devices
+Body
+{
+ device_token: PUSH-TOKEN-101
+ platform: ANDROID
+}"]
+
+R5["GET /notifications
+Query
+{
+ status: UNREAD
+}"]
+
+R6["PATCH /notifications/NOTIF-101/read"]
+
+VALIDATE["VALIDAR ORIGEN DEL EVENTO"]
+
+DEDUP["VALIDAR EVENTO NO PROCESADO"]
+
+TYPE["IDENTIFICAR TIPO DE NOTIFICACION"]
+
+RECIPIENT["RESOLVER DESTINATARIOS AUTORIZADOS"]
+
+VISIBILITY["VALIDAR INFORMACION PERMITIDA"]
+
+BUILD["CONSTRUIR MENSAJE"]
+
+SAVE["GUARDAR NOTIFICACION"]
+
+DEST["OBTENER DISPOSITIVOS REGISTRADOS"]
+
+SEND["SOLICITAR ENVIO PUSH"]
+
+REGISTER["REGISTRAR DISPOSITIVO DEL USUARIO"]
+
+READ["CONSULTAR NOTIFICACIONES PROPIAS"]
+
+MARK["MARCAR COMO LEIDA"]
+
+EVENTOK["202 EVENT ACCEPTED"]
+
+PUSHOK["202 PUSH REQUESTED"]
+
+REGISTERED["201 DEVICE REGISTERED"]
+
+OK["200 NOTIFICATIONS"]
+
+READOK["200 NOTIFICATION READ"]
+
+BAD["400 BAD REQUEST"]
+
+UNAUTH["401 UNAUTHORIZED"]
+
+FORBIDDEN["403 FORBIDDEN"]
+
+NOTFOUND["404 NOT FOUND"]
+
+CONFLICT["409 EVENT CONFLICT"]
+
+ORQ -->|Cambio de evaluacion| R1
+GRADE -->|Nota publicada| R2
+SCHED -->|Riesgo por espera| R3
+CAP -->|Escasez de recursos| R3
+
+GW -->|Registro de dispositivo| R4
+GW -->|Consulta| R5
+GW -->|Marcar leida| R6
+
+R1 --> NOTIF
+R2 --> NOTIF
+R3 --> NOTIF
+R4 --> NOTIF
+R5 --> NOTIF
+R6 --> NOTIF
+
+NOTIF -->|Evento recibido| VALIDATE
+VALIDATE --> AUTH
+
+AUTH -->|Origen no autorizado| FORBIDDEN
+AUTH -->|Origen autorizado| DEDUP
+
+DEDUP --> DB
+DB -->|Evento duplicado| EVENTOK
+DB -->|Evento nuevo| TYPE
+
+TYPE --> RECIPIENT
+RECIPIENT --> COURSE
+RECIPIENT --> AUTH
+
+COURSE -->|Usuarios vinculados| VISIBILITY
+AUTH -->|Destinatarios validos| VISIBILITY
+
+VISIBILITY -->|Datos no permitidos| FORBIDDEN
+VISIBILITY -->|Contenido autorizado| BUILD
+
+BUILD --> SAVE
+SAVE --> DB
+DB --> EVENTOK
+
+SAVE --> DEST
+DEST --> DEVICE
+DEVICE -->|Dispositivos activos| SEND
+
+SEND --> PUSH
+PUSH -->|Solicitud recibida| PUSHOK
+
+NOTIF -->|Registro de dispositivo| REGISTER
+REGISTER --> AUTH
+REGISTER --> DEVICE
+DEVICE --> REGISTERED
+
+NOTIF -->|Consulta del usuario| READ
+READ --> AUTH
+AUTH -->|Consulta autorizada| DB
+DB --> OK
+
+NOTIF -->|Actualizar lectura| MARK
+MARK --> AUTH
+MARK --> DB
+DB --> READOK
+
+EVENTOK --> ORQ
+EVENTOK --> GRADE
+EVENTOK --> SCHED
+
+PUSHOK --> NOTIF
+
+REGISTERED --> GW
+OK --> GW
+READOK --> GW
+BAD --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> GW
+
+PUSH -->|Notificacion docente| PROF
+PUSH -->|Notificacion estudiante| EST
+

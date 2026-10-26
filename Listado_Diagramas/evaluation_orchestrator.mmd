@@ -1,0 +1,210 @@
+graph LR
+
+SUB["SUBMISSION SERVICE - Entregas vigentes - Commit SHA - Reentregas"]
+
+ACT["ACTIVITY SERVICE - Rubricas versionadas - Recalificacion"]
+
+GW["SPOTTY ENTRY - Consultas de profesor y estudiante"]
+
+AUTH["ACCESS SERVICE - Permisos por curso y recurso"]
+
+ORQ["EVALUATION ORCHESTRATOR - Crea evaluaciones - Gestiona estados - Controla intentos - Valida vigencia - Coordina recuperacion - Registra resultados tecnicos - Solicita calificacion"]
+
+SCHED["EVALUATION SCHEDULER - Prioridad - Seleccion CPU GPU - Asignacion de trabajos"]
+
+CAP["SPOT CAPACITY SERVICE - Capacidad disponible - Eventos Spot - Workers activos"]
+
+EXEC["EXECUTION SERVICE - Ejecuta trabajos - Reporta progreso y resultados"]
+
+CHECK["CHECKPOINT SERVICE - Progreso durable - Checkpoints recuperables"]
+
+GRADE["GRADING SERVICE - Nota provisional - Confidence level"]
+
+NOTIF["NOTIFICATION SERVICE - Cambios relevantes de estado"]
+
+DB[("EVALUATION STATE STORE - Evaluaciones - Intentos - Estados - Lease vigente - Versiones - Resultado referenciado")]
+
+R1["POST /evaluations
+Body
+{
+ submission_id: SUB-102
+ rubric_version: 2
+ request_id: REQ-102
+}"]
+
+R2["POST /evaluations/regrade
+Body
+{
+ activity_id: ACT-101
+ rubric_version: 3
+ request_id: REGR-101
+}"]
+
+R3["GET /evaluations/EVAL-101"]
+
+R4["POST /evaluations/EVAL-101/attempts
+Body
+{
+ worker_id: WORK-CPU-01
+ assignment_id: ASG-101
+}"]
+
+R5["POST /evaluations/EVAL-101/heartbeat
+Body
+{
+ attempt_id: ATT-101
+ lease_token: LEASE-101
+ progress: 60
+}"]
+
+R6["POST /evaluations/EVAL-101/interrupt
+Body
+{
+ attempt_id: ATT-101
+ reason: SPOT_INTERRUPTION
+ checkpoint_id: CKPT-101
+}"]
+
+R7["POST /evaluations/EVAL-101/results
+Body
+{
+ attempt_id: ATT-102
+ lease_token: LEASE-102
+ result_id: RES-101
+}"]
+
+R8["POST /evaluations/EVAL-101/supersede
+Body
+{
+ new_submission_id: SUB-103
+}"]
+
+R9["GET /evaluations/EVAL-101/recovery-context"]
+
+CREATE["VALIDAR ENTREGA Y RUBRICA"]
+
+STATE["CREAR O CONSULTAR EVALUACION"]
+
+VALIDATE["VALIDAR INTENTO Y LEASE"]
+
+HEART["REGISTRAR HEARTBEAT Y PROGRESO"]
+
+LOST["IDENTIFICAR INTERRUPCION O PERDIDA"]
+
+RECOVER["OBTENER ULTIMO CHECKPOINT VALIDO"]
+
+REASSIGN["SOLICITAR REASIGNACION"]
+
+SUPER["INVALIDAR VERSIONES OBSOLETAS"]
+
+RESULT["VALIDAR RESULTADO Y VIGENCIA"]
+
+SAVE["PERSISTIR ESTADO ATOMICAMENTE"]
+
+QUERY["CONSULTAR ESTADO AUTORIZADO"]
+
+PENDING["202 EVALUATION QUEUED"]
+
+STARTED["200 ATTEMPT STARTED"]
+
+PROGRESS["200 PROGRESS ACCEPTED"]
+
+RESUMING["202 EVALUATION RESUMING"]
+
+COMPLETED["200 RESULT ACCEPTED"]
+
+OBSOLETE["409 OBSOLETE ATTEMPT"]
+
+OK["200 EVALUATION STATUS"]
+
+BAD["400 BAD REQUEST"]
+
+FORBIDDEN["403 FORBIDDEN"]
+
+NOTFOUND["404 NOT FOUND"]
+
+SUB -->|Nueva entrega aceptada| R1
+ACT -->|Rubrica actualizada| R2
+GW -->|Consulta de estado| R3
+
+SCHED -->|Trabajo asignado| R4
+EXEC -->|Reporta progreso| R5
+CAP -->|Notifica interrupcion| R6
+EXEC -->|Notifica interrupcion| R6
+EXEC -->|Entrega resultados| R7
+SUB -->|Nueva version vigente| R8
+SCHED -->|Solicita contexto para reanudar| R9
+
+R1 --> ORQ
+R2 --> ORQ
+R3 --> ORQ
+R4 --> ORQ
+R5 --> ORQ
+R6 --> ORQ
+R7 --> ORQ
+R8 --> ORQ
+R9 --> ORQ
+
+ORQ -->|Nueva evaluacion| CREATE
+CREATE --> SUB
+CREATE --> ACT
+CREATE --> STATE
+
+STATE --> DB
+DB -->|Evaluacion registrada| PENDING
+STATE -->|Solicita planificacion| SCHED
+
+ORQ -->|Asignacion de intento| VALIDATE
+VALIDATE --> DB
+VALIDATE -->|Intento vigente| SAVE
+VALIDATE -->|Intento obsoleto| OBSOLETE
+SAVE --> DB
+DB --> STARTED
+
+ORQ -->|Heartbeat recibido| HEART
+HEART --> VALIDATE
+HEART -->|Progreso valido| DB
+DB --> PROGRESS
+
+ORQ -->|Interrupcion o perdida| LOST
+LOST --> DB
+LOST --> RECOVER
+
+RECOVER --> CHECK
+CHECK -->|Checkpoint recuperable| REASSIGN
+CHECK -->|Sin checkpoint valido| REASSIGN
+
+REASSIGN --> DB
+REASSIGN --> SCHED
+REASSIGN --> RESUMING
+
+ORQ -->|Nueva entrega vigente| SUPER
+SUPER --> SUB
+SUPER --> DB
+SUPER -->|Cancela trabajo obsoleto| SCHED
+
+ORQ -->|Resultado recibido| RESULT
+RESULT --> VALIDATE
+RESULT --> SUB
+RESULT --> ACT
+RESULT -->|Resultado autorizado| SAVE
+SAVE -->|Resultado tecnico aceptado| GRADE
+SAVE --> COMPLETED
+RESULT -->|Version o intento obsoleto| OBSOLETE
+
+ORQ -->|Consulta de estado| QUERY
+QUERY --> AUTH
+AUTH -->|Consulta permitida| DB
+AUTH -->|Consulta prohibida| FORBIDDEN
+DB --> OK
+
+ORQ -->|Eventos de evaluacion| NOTIF
+
+PENDING --> SUB
+STARTED --> SCHED
+PROGRESS --> EXEC
+RESUMING --> SCHED
+COMPLETED --> EXEC
+OBSOLETE --> EXEC
+OK --> GW
+FORBIDDEN --> GW

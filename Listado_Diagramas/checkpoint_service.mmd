@@ -1,0 +1,164 @@
+graph LR
+
+EXEC["EXECUTION SERVICE - Genera progreso - Solicita checkpoints - Restaura ejecuciones"]
+
+ORQ["EVALUATION ORCHESTRATOR - Estados de evaluacion - Intentos autorizados - Coordina recuperacion"]
+
+SCHED["EVALUATION SCHEDULER - Reasigna trabajos - Solicita contexto recuperable"]
+
+CAP["SPOT CAPACITY SERVICE - Reporta interrupciones - Identifica workers afectados"]
+
+CHECK["CHECKPOINT SERVICE - Recibe checkpoints - Valida vigencia - Guarda progreso - Registra metadatos - Recupera ultima etapa valida - Verifica compatibilidad"]
+
+STORE[("CHECKPOINT STORAGE - Archivos persistentes - Estados por etapa - Artefactos de progreso - Datos recuperables")]
+
+DB[("CHECKPOINT METADATA STORE - Evaluation ID - Attempt ID - Stage - Version - Checksum - Ubicacion - Estado de persistencia")]
+
+EVIDENCE["EXECUTION EVIDENCE STORE - Resultados por etapa - Pruebas completadas - Evidencias parciales"]
+
+ACT["ACTIVITY SERVICE - Configuracion versionada - Tipo de evaluacion - Reglas de ejecucion"]
+
+OBS["OBSERVABILITY SERVICE - Guardados - Recuperaciones - Fallos - Tiempo de persistencia"]
+
+R1["POST /checkpoints
+Body
+{
+ evaluation_id: EVAL-101
+ attempt_id: ATT-101
+ stage: TRAINING-03
+ artifact_ref: ART-101
+}"]
+
+R2["GET /checkpoints/EVAL-101/latest"]
+
+R3["GET /checkpoints/CKPT-101"]
+
+R4["POST /checkpoints/CKPT-101/restore
+Body
+{
+ evaluation_id: EVAL-101
+ attempt_id: ATT-102
+ worker_id: WORK-GPU-02
+}"]
+
+R5["POST /checkpoints/EVAL-101/finalize
+Body
+{
+ attempt_id: ATT-101
+}"]
+
+R6["GET /checkpoints/EVAL-101/recovery-context"]
+
+VALIDATE["VALIDAR EVALUACION E INTENTO"]
+
+PROFILE["OBTENER PERFIL Y VERSION"]
+
+SIZE["VALIDAR TAMANO Y FORMATO"]
+
+INTEGRITY["VERIFICAR INTEGRIDAD DEL ARTEFACTO"]
+
+SAVE["PERSISTIR ARCHIVO DE CHECKPOINT"]
+
+META["REGISTRAR METADATOS DURABLES"]
+
+COMMIT["MARCAR CHECKPOINT VALIDO"]
+
+LATEST["BUSCAR ULTIMO CHECKPOINT RECUPERABLE"]
+
+COMPAT["VALIDAR COMPATIBILIDAD - Perfil CPU GPU - Imagen - Formato - Version"]
+
+RESTORE["ENTREGAR ESTADO RECUPERABLE"]
+
+STAGE["DETERMINAR ETAPA COMPLETADA"]
+
+FINAL["CERRAR PROGRESO DEL INTENTO"]
+
+SAVED["201 CHECKPOINT SAVED"]
+
+OK["200 CHECKPOINT FOUND"]
+
+RESTORED["200 RECOVERY CONTEXT READY"]
+
+FINALIZED["200 CHECKPOINT FINALIZED"]
+
+NONE["404 NO CHECKPOINT AVAILABLE"]
+
+BAD["400 INVALID CHECKPOINT"]
+
+FORBIDDEN["403 UNAUTHORIZED ATTEMPT"]
+
+CONFLICT["409 CHECKPOINT NOT COMPATIBLE"]
+
+TOOLARGE["413 CHECKPOINT TOO LARGE"]
+
+EXEC -->|Guarda progreso| R1
+ORQ -->|Consulta ultimo avance| R2
+EXEC -->|Consulta checkpoint| R3
+EXEC -->|Solicita restauracion| R4
+ORQ -->|Cierra intento| R5
+SCHED -->|Consulta progreso recuperable| R6
+
+R1 --> CHECK
+R2 --> CHECK
+R3 --> CHECK
+R4 --> CHECK
+R5 --> CHECK
+R6 --> CHECK
+
+CHECK -->|Nueva persistencia| VALIDATE
+
+VALIDATE --> ORQ
+ORQ -->|Intento no autorizado| FORBIDDEN
+ORQ -->|Intento vigente| PROFILE
+
+PROFILE --> ACT
+ACT -->|Configuracion versionada| SIZE
+
+SIZE -->|Supera 2 GiB| TOOLARGE
+SIZE -->|Tamano permitido| INTEGRITY
+
+INTEGRITY -->|Archivo invalido| BAD
+INTEGRITY -->|Archivo valido| SAVE
+
+SAVE --> STORE
+STORE -->|Persistencia confirmada| META
+
+META --> DB
+DB --> COMMIT
+COMMIT -->|Checkpoint durable| SAVED
+
+CHECK -->|Consulta ultimo checkpoint| LATEST
+LATEST --> DB
+DB -->|Sin checkpoint valido| NONE
+DB -->|Checkpoint encontrado| COMPAT
+
+COMPAT --> ACT
+COMPAT -->|Version incompatible| CONFLICT
+COMPAT -->|Compatible| STORE
+
+STORE --> RESTORE
+RESTORE --> RESTORED
+
+CHECK -->|Consulta contexto de recuperacion| STAGE
+STAGE --> DB
+STAGE --> EVIDENCE
+STAGE -->|Ultima etapa valida| RESTORED
+
+CHECK -->|Finalizacion| FINAL
+FINAL --> DB
+DB --> FINALIZED
+
+CAP -->|Interrupcion informada| ORQ
+ORQ -->|Solicita recuperacion| CHECK
+
+CHECK -->|Metricas de persistencia| OBS
+
+SAVED --> EXEC
+OK --> ORQ
+RESTORED --> EXEC
+RESTORED --> SCHED
+FINALIZED --> ORQ
+NONE --> ORQ
+CONFLICT --> EXEC
+TOOLARGE --> EXEC
+

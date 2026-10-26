@@ -1,0 +1,87 @@
+graph LR
+
+P["PROFESOR - Inicia sesión institucional - Administra cursos y estudiantes - Crea actividades y rúbricas - Usa chat con IA para preparar tareas - Publica actividades - Supervisa evaluaciones - Revisa notas provisionales y confidence level - Aprueba y publica calificaciones"]
+
+E["ESTUDIANTE - Inicia sesión institucional - Consulta cursos y actividades - Registra entregas mediante GitHub - Reentrega antes del deadline - Consulta versiones y estados - Recibe notificaciones - Consulta notas publicadas"]
+
+S["SPOTTY - Plataforma académica central - Gestiona cursos y matrículas - Gestiona actividades y rúbricas - Registra entregas y versiones - Coordina evaluaciones automáticas - Controla permisos y presupuestos LLM - Gestiona estados y resultados - Controla publicación de notas - Integra el sistema legacy"]
+
+W["WORKER - Actor técnico automatizado - Recibe evaluaciones autorizadas - Procesa programación y arquitectura con CPU - Procesa modelos de IA con GPU - Ejecuta código en sandbox aislado - Aplica rúbricas y límites - Reporta resultados y progreso - Genera evidencia y calificación provisional - Reporta confidence level"]
+
+ID["IDENTIDAD INSTITUCIONAL - Autentica profesores y estudiantes - Proporciona identidad institucional"]
+
+GH["GITHUB - Aloja repositorios estudiantiles - Proporciona código y archivos - Permite identificar commits SHA"]
+
+LLM["LLM EXTERNO - Ejecuta skill de creación de actividades - Propone enunciados y rúbricas - Asiste en criterios que requieren IA - Devuelve resultados dentro del presupuesto autorizado"]
+
+AWS["AWS SPOT - Proporciona capacidad CPU y GPU - Aloja entornos de ejecución - Capacidad disponible variable - Puede interrumpir instancias"]
+
+LEG["LEGACY ARQUITECTURA - Sistema anterior de corrección - Mantiene contratos existentes - Conserva evaluaciones históricas - Mantiene su propio modelo de datos - Coexiste durante la transición"]
+
+DB["DATOS ACADÉMICOS - Fuente de verdad de Spotty - Cursos y matrículas - Actividades y rúbricas versionadas - Entregas y commits - Estados de evaluación - Notas publicadas e historial - Presupuestos y consumo LLM"]
+
+EV["EVIDENCIA Y RESULTADOS - Resultados técnicos - Calificaciones provisionales - Confidence level y justificación - Progreso y checkpoints recuperables - Historial de intentos - Evidencia de evaluación"]
+
+LD["DATOS LEGACY - Fuente histórica del sistema anterior - Entregas anteriores - Evaluaciones previas - Calificaciones históricas - Esquemas y contratos originales"]
+
+N["NOTIFICACIONES PUSH - Avisos de cambios de estado - Avisos de calificaciones publicadas"]
+
+P -->|Inicia sesión| S
+E -->|Inicia sesión| S
+S -->|Solicita autenticación| ID
+ID -->|Devuelve identidad verificada| S
+
+P -->|Gestiona cursos estudiantes y actividades| S
+S -->|Devuelve información académica autorizada| P
+
+P -->|Solicita creación asistida| S
+S -->|Envía instrucciones y skill autorizado| LLM
+LLM -->|Devuelve propuesta de actividad y rúbrica| S
+S -->|Presenta propuesta editable| P
+P -->|Confirma y publica actividad| S
+
+S -->|Publica actividades disponibles| E
+E -->|Consulta instrucciones y deadline| S
+
+E -->|Registra enlace del repositorio| S
+S -->|Consulta repositorio y resuelve SHA| GH
+GH -->|Devuelve referencia del commit| S
+S -->|Confirma entrega y versión vigente| E
+
+S -->|Registra cursos actividades entregas y estados| DB
+DB -->|Devuelve información actual| S
+
+S -->|Solicita evaluación autorizada| W
+W -->|Solicita referencia del trabajo| S
+S -->|Entrega SHA rúbrica y configuración| W
+W -->|Recupera contenido del commit| GH
+GH -->|Devuelve código y archivos| W
+
+W -->|Utiliza capacidad de ejecución| AWS
+AWS -->|Proporciona recursos CPU o GPU disponibles| W
+
+W -->|Solicita uso autorizado del modelo| S
+S -->|Controla presupuesto y consulta modelo| LLM
+LLM -->|Devuelve respuesta y consumo| S
+S -->|Devuelve resultado autorizado| W
+
+W -->|Registra evidencia progreso y resultados| EV
+EV -->|Proporciona evidencia recuperable| W
+
+W -->|Reporta evaluación provisional y confidence level| S
+S -->|Consulta evidencia y resultados| EV
+EV -->|Devuelve resultados verificables| S
+
+S -->|Presenta evaluación y evidencia| P
+P -->|Revisa corrige y aprueba nota| S
+S -->|Guarda nota publicada e historial| DB
+S -->|Muestra calificación publicada| E
+
+S -->|Envía eventos relevantes| N
+N -->|Notifica cambios y publicación| E
+
+S -->|Gestiona compatibilidad y coexistencia| LEG
+LEG -->|Conserva contratos y comportamiento anterior| S
+LEG -->|Consulta y mantiene información propia| LD
+LD -->|Devuelve datos históricos| LEG
+

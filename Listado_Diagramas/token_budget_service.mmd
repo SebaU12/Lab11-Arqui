@@ -1,0 +1,187 @@
+graph LR
+
+CHAT["ACTIVITY CHAT SERVICE - Solicita presupuesto para conversaciones y propuestas"]
+
+EXEC["EXECUTION SERVICE - Solicita presupuesto para evaluaciones asistidas por LLM"]
+
+LLMA["LLM ACCESS SERVICE - Verifica reservas - Ejecuta llamadas autorizadas - Reporta consumo real"]
+
+ORQ["EVALUATION ORCHESTRATOR - Identifica evaluacion logica - Controla intentos y recuperaciones"]
+
+AUTH["ACCESS SERVICE - Identidad - Roles - Permisos de consumo"]
+
+TOKEN["TOKEN BUDGET SERVICE - Valida limites - Reserva tokens atomicamente - Controla cuotas - Concilia consumo real - Mantiene saldos - Conserva presupuesto entre intentos"]
+
+POLICY[("TOKEN POLICY STORE - Limites por llamada - Limites por profesor - Limites por evaluacion - Limites diarios - Concurrencia permitida")]
+
+DB[("TOKEN BUDGET STORE - Presupuesto autorizado - Tokens reservados - Tokens consumidos - Saldo disponible - Identificadores de evaluacion")]
+
+LEDGER[("TOKEN RESERVATION LEDGER - Reservation ID - Request ID - Estado de reserva - Uso reportado - Operaciones conciliadas")]
+
+OBS["OBSERVABILITY SERVICE - Consumo por usuario - Consumo por actividad - Consumo por evaluacion - Reservas pendientes"]
+
+R1["POST /token-budget/reservations
+Body
+{
+ request_id: REQ-101
+ owner_type: CHAT_SESSION
+ owner_id: CHAT-101
+ requested_tokens: 2500
+}"]
+
+R2["POST /token-budget/reservations/RES-101/commit
+Body
+{
+ provider_request_id: LLM-101
+ input_tokens: 1800
+ output_tokens: 500
+}"]
+
+R3["POST /token-budget/reservations/RES-101/release
+Body
+{
+ reason: REQUEST_NOT_SENT
+}"]
+
+R4["GET /token-budget/owners/CHAT-101"]
+
+R5["GET /token-budget/evaluations/EVAL-101"]
+
+R6["POST /token-budget/reservations/RES-101/verify"]
+
+R7["POST /token-budget/reservations/RES-101/mark-unknown
+Body
+{
+ reason: PROVIDER_OUTCOME_UNKNOWN
+}"]
+
+VALIDATE["VALIDAR IDENTIDAD Y PERMISOS"]
+
+OWNER["IDENTIFICAR CONTEXTO - Profesor - Sesion - Actividad - Evaluacion logica"]
+
+LIMIT["VALIDAR LIMITES POR LLAMADA Y CONTEXTO"]
+
+QUOTA["COMPROBAR CUOTAS DISPONIBLES"]
+
+ATOMIC["RESERVAR PRESUPUESTO ATOMICAMENTE"]
+
+SAVE["REGISTRAR RESERVA"]
+
+VERIFY["VALIDAR RESERVA Y ESTADO"]
+
+USAGE["VALIDAR CONSUMO REPORTADO"]
+
+RECONCILE["CONCILIAR TOKENS RESERVADOS Y REALES"]
+
+RELEASE["LIBERAR RESERVA NO UTILIZADA"]
+
+UNKNOWN["CONSERVAR RESERVA EN ESTADO DESCONOCIDO"]
+
+READ["CONSULTAR PRESUPUESTO Y SALDO"]
+
+RESERVED["201 TOKENS RESERVED"]
+
+COMMITTED["200 USAGE COMMITTED"]
+
+RELEASED["200 RESERVATION RELEASED"]
+
+AVAILABLE["200 BUDGET STATUS"]
+
+VALID["200 RESERVATION VALID"]
+
+HELD["202 RESERVATION HELD"]
+
+BAD["400 BAD REQUEST"]
+
+FORBIDDEN["403 TOKEN ACCESS DENIED"]
+
+EXHAUSTED["429 TOKEN BUDGET EXCEEDED"]
+
+CONFLICT["409 RESERVATION CONFLICT"]
+
+NOTFOUND["404 RESERVATION NOT FOUND"]
+
+CHAT -->|Reserva para chat| R1
+EXEC -->|Reserva para evaluacion| R1
+
+LLMA -->|Valida reserva| R6
+LLMA -->|Reporta consumo real| R2
+LLMA -->|Solicitud no enviada| R3
+LLMA -->|Resultado desconocido| R7
+
+CHAT -->|Consulta saldo| R4
+EXEC -->|Consulta presupuesto logico| R5
+ORQ -->|Consulta consumo acumulado| R5
+
+R1 --> TOKEN
+R2 --> TOKEN
+R3 --> TOKEN
+R4 --> TOKEN
+R5 --> TOKEN
+R6 --> TOKEN
+R7 --> TOKEN
+
+TOKEN -->|Nueva reserva| VALIDATE
+VALIDATE --> AUTH
+
+AUTH -->|Sin permisos| FORBIDDEN
+AUTH -->|Autorizado| OWNER
+
+OWNER --> ORQ
+OWNER --> LIMIT
+
+LIMIT --> POLICY
+POLICY -->|Limite excedido| EXHAUSTED
+POLICY -->|Limite valido| QUOTA
+
+QUOTA --> DB
+DB -->|Sin saldo| EXHAUSTED
+DB -->|Saldo suficiente| ATOMIC
+
+ATOMIC --> DB
+ATOMIC --> SAVE
+
+SAVE --> LEDGER
+LEDGER --> RESERVED
+
+TOKEN -->|Verificacion| VERIFY
+VERIFY --> LEDGER
+LEDGER -->|Reserva valida| VALID
+LEDGER -->|Reserva no valida| CONFLICT
+
+TOKEN -->|Consumo reportado| USAGE
+USAGE --> LEDGER
+USAGE -->|Consumo consistente| RECONCILE
+USAGE -->|Datos inconsistentes| CONFLICT
+
+RECONCILE --> DB
+RECONCILE --> LEDGER
+LEDGER --> COMMITTED
+
+TOKEN -->|Liberacion| RELEASE
+RELEASE --> LEDGER
+RELEASE --> DB
+DB --> RELEASED
+
+TOKEN -->|Resultado incierto| UNKNOWN
+UNKNOWN --> LEDGER
+UNKNOWN --> HELD
+
+TOKEN -->|Consulta de cuota| READ
+READ --> DB
+READ --> LEDGER
+DB --> AVAILABLE
+
+TOKEN -->|Metricas de consumo| OBS
+
+RESERVED --> CHAT
+RESERVED --> EXEC
+VALID --> LLMA
+COMMITTED --> LLMA
+RELEASED --> LLMA
+HELD --> LLMA
+AVAILABLE --> CHAT
+AVAILABLE --> EXEC
+EXHAUSTED --> CHAT
+EXHAUSTED --> EXEC
+

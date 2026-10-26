@@ -1,0 +1,108 @@
+graph LR
+
+PROF[PROFESOR]
+EST[ESTUDIANTE]
+
+GW[SPOTTY ENTRY - Entrada web y mobile]
+
+AUTH[ACCESS SERVICE - Autenticacion institucional - Validacion de identidad - Resolucion de roles - Autorizacion por curso - Control de acciones y recursos]
+
+IDP[IDENTITY PROVIDER - Identidad institucional]
+
+COURSE[COURSE SERVICE - Cursos - Matriculas - Profesores autorizados]
+
+AUTHDB[(AUTHORIZATION STORE - Identidades vinculadas - Roles - Permisos - Politicas de acceso)]
+
+R1["POST /auth/login
+Body
+{
+ institutional_token: TOKEN
+}"]
+
+R2["POST /auth/logout
+Body
+{
+ session_id: SES-101
+}"]
+
+R3["POST /authorize
+Body
+{
+ user_id: U-102
+ action: create_activity
+ resource: COURSE-101
+}"]
+
+R4["POST /authorize
+Body
+{
+ user_id: U-205
+ action: submit_assignment
+ resource: ACT-202
+}"]
+
+R5["POST /authorize
+Body
+{
+ user_id: U-102
+ action: publish_grade
+ resource: COURSE-101
+}"]
+
+VERIFY[VALIDAR IDENTIDAD]
+ROLE[RESOLVER ROL EFECTIVO]
+PERM[OBTENER PERMISOS]
+SCOPE[VALIDAR VINCULACION CON CURSO]
+CHECK[VALIDAR ACCION Y RECURSO]
+ENDSESSION[CERRAR SESION]
+
+LOGINOK[200 AUTHENTICATED]
+LOGOUTOK[200 SESSION CLOSED]
+ALLOW[200 AUTHORIZED]
+DENY[403 FORBIDDEN]
+UNAUTH[401 UNAUTHORIZED]
+
+PROF --> GW
+EST --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+GW --> R5
+
+R1 --> AUTH
+R2 --> AUTH
+R3 --> AUTH
+R4 --> AUTH
+R5 --> AUTH
+
+AUTH -->|Login o verificacion requerida| VERIFY
+VERIFY --> IDP
+
+IDP -->|Identidad invalida| UNAUTH
+IDP -->|Identidad valida| ROLE
+
+ROLE --> AUTHDB
+AUTHDB --> PERM
+
+PERM --> COURSE
+COURSE -->|Cursos y vinculaciones autorizadas| SCOPE
+
+SCOPE --> CHECK
+
+CHECK -->|Accion permitida| ALLOW
+CHECK -->|Accion prohibida| DENY
+CHECK -->|Identidad no autenticada| UNAUTH
+
+ROLE -->|Inicio de sesion valido| LOGINOK
+
+AUTH -->|Solicitud de cierre| ENDSESSION
+ENDSESSION --> LOGOUTOK
+
+LOGINOK --> GW
+LOGOUTOK --> GW
+ALLOW --> GW
+DENY --> GW
+UNAUTH --> GW
+

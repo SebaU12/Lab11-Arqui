@@ -1,0 +1,153 @@
+graph LR
+
+EST[ESTUDIANTE]
+PROF[PROFESOR]
+
+GW[SPOTTY ENTRY - Web docente - Mobile estudiante]
+
+SUB[SUBMISSION SERVICE - Registra entregas GitHub - Resuelve commit SHA - Valida deadline - Gestiona reentregas - Determina version vigente - Conserva versiones - Solicita evaluacion]
+
+AUTH[ACCESS SERVICE - Identidad - Roles - Permisos por curso]
+
+COURSE[COURSE SERVICE - Cursos - Matriculas]
+
+ACT[ACTIVITY SERVICE - Actividades - Deadlines - Estado de publicacion - Rubrica vigente]
+
+GH[GITHUB - Repositorios - Referencias de commits - Contenido versionado]
+
+EVAL[EVALUATION ORCHESTRATOR - Crea evaluaciones - Coordina intentos - Invalida evaluaciones obsoletas]
+
+DB[(SUBMISSION STORE - Entregas - Commit SHA - Fecha de recepcion - Version vigente - Version de rubrica - Historial interno)]
+
+R1["POST /activities/ACT-101/submissions
+Body
+{
+ repository_url: https://github.com/student/project
+ commit_ref: main
+ idempotency_key: REQ-101
+}"]
+
+R2["GET /activities/ACT-101/submissions/current"]
+
+R3["GET /submissions/SUB-101/status"]
+
+R4["GET /submissions/SUB-101"]
+
+R5["GET /submissions/SUB-101/evaluation-reference"]
+
+VALIDATE[VALIDAR IDENTIDAD Y PERMISOS]
+
+ENROLL[VERIFICAR MATRICULA]
+
+ACTCHECK[VALIDAR ACTIVIDAD PUBLICADA]
+
+DEADLINE[VALIDAR FECHA LIMITE]
+
+REPO[VALIDAR REPOSITORIO Y RESOLVER SHA]
+
+VERSION[VALIDAR REENTREGA Y VERSION VIGENTE]
+
+SAVE[REGISTRAR ENTREGA ATOMICAMENTE]
+
+SUPERSEDE[MARCAR VERSION ANTERIOR COMO REEMPLAZADA]
+
+REQUEST[REGISTRAR SOLICITUD DE EVALUACION]
+
+READ[CONSULTAR ENTREGA AUTORIZADA]
+
+CURRENT[OBTENER VERSION VIGENTE]
+
+REFERENCE[OBTENER REFERENCIA INMUTABLE]
+
+CREATED[201 SUBMISSION ACCEPTED]
+
+OK[200 OK]
+
+BAD[400 BAD REQUEST]
+
+UNAUTH[401 UNAUTHORIZED]
+
+FORBIDDEN[403 FORBIDDEN]
+
+NOTFOUND[404 NOT FOUND]
+
+CONFLICT[409 SUBMISSION CONFLICT]
+
+EXPIRED[422 DEADLINE EXPIRED]
+
+EST --> GW
+PROF --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+
+EVAL -->|Solicita referencia de entrega| R5
+
+R1 --> SUB
+R2 --> SUB
+R3 --> SUB
+R4 --> SUB
+R5 --> SUB
+
+SUB -->|Operacion de estudiante| VALIDATE
+
+VALIDATE --> AUTH
+
+AUTH -->|Identidad invalida| UNAUTH
+AUTH -->|Acceso denegado| FORBIDDEN
+AUTH -->|Acceso permitido| ENROLL
+
+ENROLL --> COURSE
+COURSE -->|Sin matricula| FORBIDDEN
+COURSE -->|Matricula valida| ACTCHECK
+
+ACTCHECK --> ACT
+ACT -->|Actividad inexistente| NOTFOUND
+ACT -->|Actividad no publicada| CONFLICT
+ACT -->|Actividad publicada| DEADLINE
+
+DEADLINE -->|Fuera de plazo| EXPIRED
+DEADLINE -->|Dentro del plazo| REPO
+
+REPO --> GH
+GH -->|Repositorio o commit invalido| BAD
+GH -->|Commit SHA resuelto| VERSION
+
+VERSION --> DB
+DB -->|Solicitud duplicada| OK
+DB -->|Version nueva valida| SAVE
+
+SAVE --> DB
+SAVE --> SUPERSEDE
+
+SUPERSEDE --> DB
+SUPERSEDE --> REQUEST
+
+REQUEST --> DB
+REQUEST -->|Nueva entrega aceptada| EVAL
+
+EVAL -->|Solicitud de evaluacion registrada| CREATED
+
+SUB -->|Consulta de version vigente| CURRENT
+CURRENT --> DB
+DB --> OK
+
+SUB -->|Consulta de entrega o estado| READ
+READ --> DB
+DB --> OK
+
+SUB -->|Consulta interna de evaluacion| REFERENCE
+REFERENCE --> DB
+DB -->|Commit y version de rubrica| EVAL
+
+CREATED --> GW
+OK --> GW
+BAD --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> GW
+EXPIRED --> GW
+

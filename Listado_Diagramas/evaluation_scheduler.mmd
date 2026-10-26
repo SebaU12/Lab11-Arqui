@@ -1,0 +1,171 @@
+
+graph LR
+
+ORQ["EVALUATION ORCHESTRATOR - Evaluaciones - Estados - Intentos - Autorizacion de asignaciones"]
+
+SCHED["EVALUATION SCHEDULER - Clasifica CPU GPU - Gestiona trabajo pendiente - Prioriza evaluaciones - Aplica reparto justo - Selecciona workers - Solicita capacidad"]
+
+CAP["SPOT CAPACITY SERVICE - Capacidad CPU GPU - Instancias disponibles - Recursos de workers - Solicitudes de ampliacion"]
+
+EXEC["EXECUTION SERVICE - Ejecuta trabajo autorizado - Prepara sandbox - Reporta inicio y finalizacion"]
+
+ACT["ACTIVITY SERVICE - Deadline - Modalidad - Configuracion de evaluacion"]
+
+CHECK["CHECKPOINT SERVICE - Progreso recuperable - Ultima etapa completada"]
+
+OBS["OBSERVABILITY SERVICE - Profundidad de cola - Tiempo de espera - Saturacion - Riesgo de plazo"]
+
+CPUQ[("CPU EVALUATION QUEUE - Programacion - Arquitectura - Pendientes CPU")]
+
+GPUQ[("GPU EVALUATION QUEUE - Inteligencia Artificial - Pendientes GPU")]
+
+QDB[("QUEUE STORE - Referencias de evaluaciones - Prioridad - Estado de asignacion - Perfil requerido")]
+
+R1["POST /scheduler/enqueue
+Body
+{
+ evaluation_id: EVAL-101
+ activity_id: ACT-101
+ execution_profile: CPU
+}"]
+
+R2["POST /scheduler/assign
+Body
+{
+ pool: CPU
+ worker_id: WORK-CPU-01
+}"]
+
+R3["POST /scheduler/requeue
+Body
+{
+ evaluation_id: EVAL-101
+ reason: SPOT_INTERRUPTION
+}"]
+
+R4["POST /scheduler/cancel
+Body
+{
+ evaluation_id: EVAL-101
+ reason: SUPERSEDED
+}"]
+
+R5["GET /scheduler/queues"]
+
+R6["GET /scheduler/capacity-demand"]
+
+CLASS["CLASIFICAR PERFIL CPU O GPU"]
+
+VALID["VALIDAR EVALUACION VIGENTE"]
+
+PRIORITY["CALCULAR PRIORIDAD - Deadline - Urgencia 48 horas - Reanudacion - Reparto justo"]
+
+ENQUEUE["REGISTRAR TRABAJO PENDIENTE"]
+
+SELECT["SELECCIONAR SIGUIENTE EVALUACION"]
+
+CAPCHECK["CONSULTAR CAPACIDAD DISPONIBLE"]
+
+ASSIGN["SOLICITAR AUTORIZACION DE INTENTO"]
+
+DISPATCH["ENTREGAR TRABAJO AUTORIZADO"]
+
+RECOVER["IDENTIFICAR REANUDACION"]
+
+CANCEL["RETIRAR TRABAJO OBSOLETO"]
+
+MONITOR["CONSULTAR COLAS Y DEMANDA"]
+
+QUEUED["202 EVALUATION QUEUED"]
+
+ASSIGNED["200 EVALUATION ASSIGNED"]
+
+REQUEUED["202 EVALUATION REQUEUED"]
+
+CANCELLED["200 EVALUATION CANCELLED"]
+
+WAITING["202 WAITING FOR CAPACITY"]
+
+OK["200 QUEUE STATUS"]
+
+BAD["400 BAD REQUEST"]
+
+NOTFOUND["404 EVALUATION NOT FOUND"]
+
+CONFLICT["409 EVALUATION NOT ELIGIBLE"]
+
+ORQ -->|Nueva evaluacion| R1
+CAP -->|Worker disponible| R2
+ORQ -->|Evaluacion interrumpida| R3
+ORQ -->|Evaluacion reemplazada| R4
+
+OBS -->|Consulta operativa| R5
+CAP -->|Consulta demanda| R6
+
+R1 --> SCHED
+R2 --> SCHED
+R3 --> SCHED
+R4 --> SCHED
+R5 --> SCHED
+R6 --> SCHED
+
+SCHED -->|Nueva solicitud| CLASS
+CLASS --> ACT
+
+ACT -->|Modalidad y deadline| VALID
+
+VALID --> ORQ
+ORQ -->|Evaluacion invalida| CONFLICT
+ORQ -->|Evaluacion vigente| PRIORITY
+
+PRIORITY --> ENQUEUE
+
+ENQUEUE -->|Perfil CPU| CPUQ
+ENQUEUE -->|Perfil GPU| GPUQ
+
+CPUQ --> QDB
+GPUQ --> QDB
+
+QDB --> QUEUED
+
+SCHED -->|Solicitud de asignacion| SELECT
+
+SELECT --> QDB
+QDB -->|Candidato CPU o GPU| CAPCHECK
+
+CAPCHECK --> CAP
+
+CAP -->|Sin capacidad| WAITING
+WAITING -->|Demanda pendiente| CAP
+
+CAP -->|Capacidad disponible| ASSIGN
+
+ASSIGN --> ORQ
+ORQ -->|Intento rechazado| CONFLICT
+ORQ -->|Intento autorizado| DISPATCH
+
+DISPATCH --> EXEC
+EXEC -->|Trabajo recibido| ASSIGNED
+
+SCHED -->|Interrupcion reportada| RECOVER
+RECOVER --> CHECK
+CHECK -->|Referencia de progreso valido| PRIORITY
+
+SCHED -->|Cancelacion solicitada| CANCEL
+CANCEL --> QDB
+CANCEL --> CANCELLED
+
+SCHED -->|Consulta de estado| MONITOR
+MONITOR --> CPUQ
+MONITOR --> GPUQ
+MONITOR --> CAP
+MONITOR --> OK
+
+SCHED -->|Demanda y espera de colas| OBS
+
+QUEUED --> ORQ
+ASSIGNED --> CAP
+REQUEUED --> ORQ
+CANCELLED --> ORQ
+OK --> OBS
+

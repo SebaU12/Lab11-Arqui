@@ -1,0 +1,183 @@
+graph LR
+
+PROF[PROFESOR]
+
+GW[SPOTTY ENTRY - Web docente]
+
+CHAT[ACTIVITY CHAT SERVICE - Gestiona conversaciones docentes - Construye contexto autorizado - Solicita generacion asistida - Permite refinar propuestas - Guarda borradores - Entrega propuestas editables]
+
+AUTH[ACCESS SERVICE - Identidad - Roles - Permisos]
+
+COURSE[COURSE SERVICE - Cursos - Profesores asignados]
+
+ACT[ACTIVITY SERVICE - Valida propuestas - Crea y modifica actividades - Versiona rubricas - Publica con confirmacion docente]
+
+TOKEN[TOKEN BUDGET SERVICE - Verifica limites - Reserva presupuesto - Concilia consumo]
+
+LLMA[LLM ACCESS SERVICE - Ejecuta solicitudes autorizadas - Carga skill de actividades - Valida contrato del proveedor]
+
+LLM[LLM EXTERNO - Skill activity-draft-v1 - Genera actividades y rubricas - Refina propuestas]
+
+CHATDB[(CHAT SESSION STORE - Sesiones - Mensajes - Contexto limitado - Propuestas - Versiones de borrador)]
+
+R1["POST /activity-chat/sessions
+Body
+{
+ course_id: COURSE-101
+}"]
+
+R2["POST /activity-chat/sessions/CHAT-101/messages
+Body
+{
+ message: Crear laboratorio de escalabilidad
+}"]
+
+R3["GET /activity-chat/sessions/CHAT-101"]
+
+R4["PATCH /activity-chat/sessions/CHAT-101/proposal
+Body
+{
+ title: Laboratorio Spotty
+ criteria: [...]
+ weights: [...]
+ expected_version: 1
+}"]
+
+R5["POST /activity-chat/sessions/CHAT-101/refine
+Body
+{
+ instruction: Ajustar criterios de escalabilidad
+ expected_version: 2
+}"]
+
+R6["POST /activity-chat/sessions/CHAT-101/submit-proposal
+Body
+{
+ proposal_version: 3
+}"]
+
+VALIDATE[VALIDAR IDENTIDAD Y CURSO]
+
+SESSION[CREAR O RECUPERAR SESION]
+
+CONTEXT[CONSTRUIR CONTEXTO AUTORIZADO]
+
+LIMITS[VALIDAR CONTEXTO Y LIMITE DE SESION]
+
+REQUEST[SOLICITAR GENERACION O REFINAMIENTO]
+
+PARSE[INTERPRETAR RESPUESTA ESTRUCTURADA]
+
+SCHEMA[VALIDAR ESTRUCTURA DE PROPUESTA]
+
+SAVE[GUARDAR MENSAJES Y BORRADOR]
+
+EDIT[VALIDAR EDICION Y VERSION]
+
+READ[CONSULTAR CONVERSACION AUTORIZADA]
+
+SUBMIT[ENTREGAR PROPUESTA PARA VALIDACION]
+
+CREATED[201 CHAT SESSION CREATED]
+
+OK[200 OK]
+
+PROPOSED[200 PROPOSAL GENERATED]
+
+SUBMITTED[200 PROPOSAL SUBMITTED]
+
+BAD[400 BAD REQUEST]
+
+UNAUTH[401 UNAUTHORIZED]
+
+FORBIDDEN[403 FORBIDDEN]
+
+NOTFOUND[404 NOT FOUND]
+
+CONFLICT[409 VERSION CONFLICT]
+
+LIMIT[429 CHAT LIMIT REACHED]
+
+UNAVAILABLE[503 LLM UNAVAILABLE]
+
+PROF --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+GW --> R5
+GW --> R6
+
+R1 --> CHAT
+R2 --> CHAT
+R3 --> CHAT
+R4 --> CHAT
+R5 --> CHAT
+R6 --> CHAT
+
+CHAT --> VALIDATE
+VALIDATE --> AUTH
+AUTH -->|Identidad invalida| UNAUTH
+AUTH -->|Permiso denegado| FORBIDDEN
+AUTH -->|Profesor autorizado| COURSE
+
+COURSE -->|Profesor vinculado al curso| SESSION
+COURSE -->|Curso no autorizado| FORBIDDEN
+
+SESSION --> CHATDB
+CHATDB --> CREATED
+
+CHAT -->|Mensaje docente| CONTEXT
+CONTEXT --> CHATDB
+CONTEXT --> LIMITS
+
+LIMITS -->|Contexto excedido| LIMIT
+LIMITS -->|Contexto valido| REQUEST
+
+REQUEST --> TOKEN
+TOKEN -->|Presupuesto rechazado| LIMIT
+TOKEN -->|Presupuesto reservado| LLMA
+
+LLMA -->|Solicitud con skill autorizado| LLM
+LLM -->|Respuesta estructurada| LLMA
+LLM -->|Proveedor no disponible| UNAVAILABLE
+
+LLMA -->|Consumo reportado| TOKEN
+LLMA -->|Respuesta del modelo| PARSE
+
+PARSE --> SCHEMA
+SCHEMA -->|Formato invalido| BAD
+SCHEMA -->|Formato valido| SAVE
+
+SAVE --> CHATDB
+CHATDB --> PROPOSED
+
+CHAT -->|Consulta de sesion| READ
+READ --> CHATDB
+CHATDB --> OK
+
+CHAT -->|Edicion docente| EDIT
+EDIT -->|Version obsoleta| CONFLICT
+EDIT -->|Edicion valida| CHATDB
+CHATDB --> OK
+
+CHAT -->|Propuesta seleccionada| SUBMIT
+SUBMIT --> CHATDB
+SUBMIT --> ACT
+
+ACT -->|Validacion aceptada| SUBMITTED
+ACT -->|Errores de propuesta| BAD
+
+CREATED --> GW
+OK --> GW
+PROPOSED --> GW
+SUBMITTED --> GW
+BAD --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> GW
+LIMIT --> GW
+UNAVAILABLE --> GW
+

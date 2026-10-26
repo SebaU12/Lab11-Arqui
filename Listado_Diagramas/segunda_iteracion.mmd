@@ -1,0 +1,182 @@
+graph LR
+
+PROF["PROFESOR"]
+EST["ESTUDIANTE"]
+WORK["WORKER - Actor técnico CPU y GPU"]
+
+ENTRY["SPOTTY ENTRY - Entrada web y mobile - Enrutamiento de solicitudes"]
+
+AUTH["ACCESS SERVICE - Identidad institucional - Roles - Permisos por curso"]
+
+COURSE["COURSE SERVICE - Gestión de cursos - Matrículas - Relación profesor estudiante"]
+
+ACT["ACTIVITY SERVICE - Crea y modifica actividades - Gestiona deadlines - Versiona rúbricas - Publica actividades"]
+
+CHAT["ACTIVITY CHAT SERVICE - Conversaciones docentes - Construye solicitudes al LLM - Genera propuestas de actividades - Permite refinamiento"]
+
+SUB["SUBMISSION SERVICE - Registra entregas GitHub - Resuelve commit SHA - Gestiona reentregas - Identifica versión vigente - Mantiene historial"]
+
+EVAL["EVALUATION ORCHESTRATOR - Crea evaluaciones - Coordina estados e intentos - Asocia entregas y rúbricas - Controla versiones vigentes - Coordina resultados"]
+
+SCHED["EVALUATION SCHEDULER - Clasifica CPU y GPU - Prioriza por deadline - Reparte trabajos entre cursos - Asigna evaluaciones autorizadas"]
+
+CPUQ["CPU EVALUATION QUEUE - Programación - Arquitectura - Trabajos pendientes CPU"]
+
+GPUQ["GPU EVALUATION QUEUE - Inteligencia Artificial - Trabajos pendientes GPU"]
+
+EXEC["EXECUTION SERVICE - Prepara entorno por curso - Obtiene código y rúbrica - Configura sandbox - Ejecuta pruebas - Aplica límites de recursos - Reporta resultados"]
+
+CHECK["CHECKPOINT SERVICE - Persiste progreso - Recupera etapas anteriores - Asocia evidencias e intentos"]
+
+GRADE["GRADING SERVICE - Evalúa evidencias por rúbrica - Calcula nota provisional - Gestiona criterios incompletos - Calcula confidence level"]
+
+REVIEW["GRADE REVIEW SERVICE - Presenta evidencia al profesor - Gestiona revisiones y ajustes - Aprueba y publica notas - Conserva historial de publicación"]
+
+TOKEN["TOKEN BUDGET SERVICE - Controla presupuestos LLM - Reserva tokens - Concilia consumo - Conserva cuotas entre intentos"]
+
+LLMG["LLM ACCESS SERVICE - Centraliza acceso al proveedor - Aplica contexto autorizado - Ejecuta solicitudes de chat y evaluación - Registra resultados y uso"]
+
+NOTIF["NOTIFICATION SERVICE - Cambios de estado - Avisos de notas publicadas - Alertas de plazo académico"]
+
+LEGACY["LEGACY COMPATIBILITY SERVICE - Adapta contratos anteriores - Consulta datos históricos - Identifica sistema responsable - Coordina transición progresiva"]
+
+OBS["OBSERVABILITY SERVICE - Estados de evaluación - Trabajos pendientes - Duración de evaluaciones - Consumo CPU GPU memoria - Uso de tokens - Riesgo de plazo"]
+
+IDP["IDENTIDAD INSTITUCIONAL"]
+
+GH["GITHUB - Repositorios - Código - Commit SHA"]
+
+LLM["LLM EXTERNO - Skill docente - Análisis asistido - Respuestas de evaluación"]
+
+SPOT["AWS SPOT - Capacidad CPU y GPU - Infraestructura de ejecución"]
+
+LEG["LEGACY ARQUITECTURA - Contratos v1 - Corrección anterior - Persistencia propia"]
+
+PUSH["PROVEEDOR PUSH"]
+
+ACADEMICDB[("ACADEMIC STORE - Cursos - Matrículas - Actividades - Rúbricas")]
+
+SUBDB[("SUBMISSION STORE - Entregas - Commits - Historial - Versión vigente")]
+
+EVALDB[("EVALUATION STATE STORE - Evaluaciones - Intentos - Estados - Asignaciones")]
+
+QUEUEDB[("EVALUATION QUEUE STORE - Trabajos CPU y GPU - Prioridad")]
+
+EVIDENCE[("EVIDENCE AND CHECKPOINT STORE - Resultados técnicos - Evidencias - Progreso recuperable")]
+
+GRADEDB[("GRADE STORE - Notas provisionales - Confianza - Revisiones - Notas publicadas")]
+
+TOKDB[("TOKEN USAGE STORE - Presupuestos - Reservas - Consumo")]
+
+CHATDB[("CHAT SESSION STORE - Conversaciones - Propuestas de actividades")]
+
+LEGDB[("LEGACY DATA STORE - Entregas históricas - Evaluaciones anteriores - Calificaciones anteriores")]
+
+METDB[("METRICS STORE - Métricas y eventos operativos")]
+
+
+PROF -->|Accede desde desktop| ENTRY
+EST -->|Accede desde mobile| ENTRY
+
+ENTRY --> AUTH
+AUTH --> IDP
+
+AUTH --> COURSE
+AUTH --> ACT
+AUTH --> SUB
+AUTH --> REVIEW
+
+COURSE --> ACADEMICDB
+ACT --> ACADEMICDB
+
+PROF -->|Prepara actividad mediante chat| CHAT
+CHAT --> CHATDB
+CHAT --> TOKEN
+CHAT --> LLMG
+LLMG --> LLM
+LLM --> LLMG
+LLMG --> CHAT
+CHAT -->|Propuesta editable| PROF
+
+ACT -->|Publica actividades autorizadas| ENTRY
+ENTRY -->|Muestra actividades| EST
+
+EST -->|Registra repositorio| ENTRY
+ENTRY --> SUB
+SUB --> GH
+GH -->|Commit y contenido referenciado| SUB
+SUB --> SUBDB
+
+SUB -->|Entrega aceptada| EVAL
+EVAL --> EVALDB
+
+EVAL -->|Solicita planificación| SCHED
+SCHED -->|Programación y Arquitectura| CPUQ
+SCHED -->|Inteligencia Artificial| GPUQ
+
+CPUQ --> QUEUEDB
+GPUQ --> QUEUEDB
+
+CPUQ -->|Asigna trabajo CPU| WORK
+GPUQ -->|Asigna trabajo GPU| WORK
+
+WORK --> EXEC
+EXEC --> SPOT
+EXEC --> GH
+EXEC --> ACT
+EXEC --> CHECK
+
+CHECK --> EVIDENCE
+CHECK -->|Progreso recuperable| EXEC
+
+EXEC -->|Solicita análisis asistido| TOKEN
+TOKEN --> TOKDB
+TOKEN -->|Solicitud autorizada| LLMG
+LLMG -->|Resultado de análisis| EXEC
+
+EXEC -->|Resultados técnicos| EVAL
+EVAL -->|Actualiza intento y estado| EVALDB
+EVAL -->|Envía evidencia para calificación| GRADE
+
+GRADE --> EVIDENCE
+GRADE --> ACADEMICDB
+GRADE -->|Registra nota provisional y confianza| GRADEDB
+GRADE -->|Resultado provisional| REVIEW
+
+REVIEW --> GRADEDB
+REVIEW --> EVIDENCE
+
+PROF -->|Revisa evidencias y calificaciones| ENTRY
+ENTRY --> REVIEW
+
+PROF -->|Aprueba publicación| ENTRY
+REVIEW -->|Publica nota autorizada| GRADEDB
+
+ENTRY -->|Consulta estados| EVAL
+ENTRY -->|Consulta notas publicadas| REVIEW
+ENTRY -->|Devuelve estados y calificaciones| EST
+
+EVAL -->|Cambios de estado| NOTIF
+REVIEW -->|Calificación publicada| NOTIF
+NOTIF --> PUSH
+PUSH -->|Notificación móvil| EST
+
+COURSE --> LEGACY
+ACT --> LEGACY
+SUB --> LEGACY
+REVIEW --> LEGACY
+
+LEGACY -->|Adapta y consulta contratos anteriores| LEG
+LEG --> LEGDB
+
+EVAL --> OBS
+SCHED --> OBS
+EXEC --> OBS
+CHECK --> OBS
+GRADE --> OBS
+TOKEN --> OBS
+LEGACY --> OBS
+OBS --> METDB
+
+OBS -->|Alertas de riesgo académico| NOTIF
+

@@ -1,0 +1,151 @@
+graph LR
+
+ORQ["EVALUATION ORCHESTRATOR - Evaluaciones - Intentos vigentes - Resultados autorizados"]
+
+EXEC["EXECUTION SERVICE - Resultados tecnicos - Pruebas - Errores - Evidencias"]
+
+ACT["ACTIVITY SERVICE - Rubricas versionadas - Criterios - Pesos - Reglas de evaluacion"]
+
+SUB["SUBMISSION SERVICE - Ultima entrega valida - Commit SHA - Version vigente"]
+
+GRADE["GRADING SERVICE - Valida resultados - Aplica rubrica - Calcula nota provisional - Calcula confidence level - Identifica evaluaciones inconclusas"]
+
+REVIEW["GRADE REVIEW SERVICE - Revision docente - Aprobacion - Publicacion de notas"]
+
+AUTH["ACCESS SERVICE - Permisos academicos"]
+
+GW["SPOTTY ENTRY - Web docente"]
+
+EVIDENCE[("EXECUTION EVIDENCE STORE - Resultados por criterio - Pruebas ejecutadas - Errores - Evidencia tecnica")]
+
+DB[("GRADING STORE - Calificaciones provisionales - Confidence level - Criterios evaluados - Justificacion - Version de calculo")]
+
+R1["POST /grading/evaluations
+Body
+{
+ evaluation_id: EVAL-101
+ result_id: RES-101
+}"]
+
+R2["GET /grading/evaluations/EVAL-101"]
+
+R3["GET /grading/evaluations/EVAL-101/criteria"]
+
+R4["GET /grading/evaluations/EVAL-101/confidence"]
+
+R5["POST /grading/evaluations/EVAL-101/recalculate
+Body
+{
+ reason: RUBRIC_REGRADING
+ rubric_version: 3
+}"]
+
+VALIDATE["VALIDAR EVALUACION AUTORIZADA"]
+
+CURRENT["VALIDAR ENTREGA Y VERSION VIGENTE"]
+
+RUBRIC["OBTENER RUBRICA VERSIONADA"]
+
+LOAD["OBTENER EVIDENCIAS TECNICAS"]
+
+CHECK["VALIDAR COMPLETITUD Y CALIDAD DE EVIDENCIA"]
+
+SCORE["CALCULAR PUNTAJE POR CRITERIO"]
+
+TOTAL["CALCULAR NOTA PROVISIONAL"]
+
+CONF["CALCULAR CONFIDENCE LEVEL"]
+
+EXPLAIN["GENERAR JUSTIFICACION DE CONFIANZA"]
+
+INCONCLUSIVE["MARCAR EVALUACION NO CONCLUYENTE"]
+
+SAVE["PERSISTIR RESULTADO PROVISIONAL"]
+
+READ["CONSULTAR CALIFICACION AUTORIZADA"]
+
+RECALC["IDENTIFICAR NUEVA EVALUACION O RUBRICA"]
+
+PROVISIONAL["201 PROVISIONAL GRADE CREATED"]
+
+OK["200 GRADING RESULT"]
+
+RECALCULATED["202 REGRADING REQUEST ACCEPTED"]
+
+INCOMPLETE["200 INCONCLUSIVE RESULT"]
+
+BAD["400 INVALID EVIDENCE"]
+
+FORBIDDEN["403 FORBIDDEN"]
+
+NOTFOUND["404 EVALUATION NOT FOUND"]
+
+CONFLICT["409 OBSOLETE EVALUATION"]
+
+ORQ -->|Resultado tecnico aceptado| R1
+
+GW -->|Consulta docente| R2
+GW -->|Consulta criterios| R3
+GW -->|Consulta confianza| R4
+
+REVIEW -->|Solicita nueva calificacion| R5
+
+R1 --> GRADE
+R2 --> GRADE
+R3 --> GRADE
+R4 --> GRADE
+R5 --> GRADE
+
+GRADE -->|Nueva calificacion| VALIDATE
+
+VALIDATE --> ORQ
+ORQ -->|Evaluacion obsoleta| CONFLICT
+ORQ -->|Evaluacion valida| CURRENT
+
+CURRENT --> SUB
+SUB -->|Entrega reemplazada| CONFLICT
+SUB -->|Entrega vigente| RUBRIC
+
+RUBRIC --> ACT
+ACT -->|Rubrica versionada| LOAD
+
+LOAD --> EVIDENCE
+EVIDENCE --> CHECK
+
+CHECK -->|Evidencia suficiente| SCORE
+CHECK -->|Evidencia insuficiente| INCONCLUSIVE
+
+SCORE --> TOTAL
+TOTAL --> CONF
+
+CONF --> EXPLAIN
+EXPLAIN --> SAVE
+
+SAVE --> DB
+DB --> PROVISIONAL
+
+INCONCLUSIVE --> DB
+DB --> INCOMPLETE
+
+GRADE -->|Consulta de resultado| READ
+READ --> AUTH
+AUTH -->|Sin permisos| FORBIDDEN
+AUTH -->|Consulta autorizada| DB
+DB --> OK
+
+GRADE -->|Solicitud de recalificacion| RECALC
+RECALC --> ORQ
+ORQ -->|Nueva evaluacion generada| RECALCULATED
+
+GRADE -->|Resultado provisional disponible| REVIEW
+
+PROVISIONAL --> ORQ
+PROVISIONAL --> REVIEW
+
+INCOMPLETE --> REVIEW
+
+OK --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> ORQ
+

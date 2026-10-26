@@ -1,0 +1,212 @@
+graph LR
+
+SCHED["EVALUATION SCHEDULER - Asigna trabajos CPU y GPU - Selecciona worker compatible"]
+
+ORQ["EVALUATION ORCHESTRATOR - Autoriza intentos - Controla vigencia - Gestiona estados y resultados"]
+
+EXEC["EXECUTION SERVICE - Prepara sandboxes - Ejecuta evaluaciones - Aplica limites de recursos - Genera resultados tecnicos - Reporta progreso"]
+
+CAP["SPOT CAPACITY SERVICE - Instancias CPU GPU - Recursos disponibles - Estado de workers"]
+
+ACT["ACTIVITY SERVICE - Rubricas versionadas - Configuracion de evaluacion"]
+
+SUB["SUBMISSION SERVICE - Commit SHA - Repositorio - Version de entrega"]
+
+CHECK["CHECKPOINT SERVICE - Guarda progreso - Recupera etapas - Mantiene checkpoints durables"]
+
+TOKEN["TOKEN BUDGET SERVICE - Autoriza consumo LLM - Reserva presupuesto"]
+
+LLMA["LLM ACCESS SERVICE - Acceso autorizado al modelo - Registra consumo"]
+
+GH["GITHUB - Repositorios - Codigo - Archivos del commit"]
+
+IMG["IMAGE REGISTRY - Imagen base de cada curso - Version de imagen - Artefactos de 3 a 5 GB"]
+
+AWS["AWS SPOT WORKER - Capacidad CPU o GPU - Aloja entorno de ejecucion"]
+
+SANDBOX["MICROVM SANDBOX - Ejecuta codigo no confiable - Aislamiento individual - Recursos limitados"]
+
+OBS["OBSERVABILITY SERVICE - Duracion - CPU GPU memoria - Fallos - Excesos de recursos"]
+
+EVIDENCE[("EXECUTION EVIDENCE STORE - Resultados por criterio - Logs de pruebas - Errores - Referencias de artefactos")]
+
+R1["POST /executions
+Body
+{
+ evaluation_id: EVAL-101
+ attempt_id: ATT-101
+ lease_token: LEASE-101
+ worker_id: WORK-CPU-01
+}"]
+
+R2["GET /executions/ATT-101/status"]
+
+R3["POST /executions/ATT-101/stop
+Body
+{
+ reason: SUPERSEDED
+}"]
+
+R4["POST /executions/ATT-101/checkpoint
+Body
+{
+ stage: TEST-03
+}"]
+
+R5["POST /executions/ATT-101/finish
+Body
+{
+ result_id: RES-101
+ status: COMPLETED
+}"]
+
+R6["POST /executions/ATT-101/interruption
+Body
+{
+ reason: SPOT_INTERRUPTION
+}"]
+
+VALIDATE["VALIDAR INTENTO AUTORIZADO"]
+
+PROFILE["OBTENER PERFIL DE EJECUCION"]
+
+RESOURCES["VALIDAR CPU GPU MEMORIA DISCO Y TIEMPO"]
+
+SOURCE["OBTENER CODIGO DEL COMMIT"]
+
+IMAGE["OBTENER IMAGEN BASE DEL CURSO"]
+
+PREPARE["PREPARAR MICROVM AISLADA"]
+
+RUN["EJECUTAR PRUEBAS Y ANALISIS"]
+
+LIMITS["SUPERVISAR CONSUMO DE RECURSOS"]
+
+PROGRESS["REGISTRAR RESULTADOS POR ETAPA"]
+
+LLMCHECK["DETERMINAR SI SE REQUIERE LLM"]
+
+RESULT["CONSOLIDAR EVIDENCIAS TECNICAS"]
+
+FINISH["REPORTAR RESULTADO AL ORQUESTADOR"]
+
+RESTORE["RECUPERAR CHECKPOINT VALIDO"]
+
+STOP["DETENER EJECUCION"]
+
+CLEAN["LIBERAR SANDBOX Y RECURSOS"]
+
+ACCEPTED["202 EXECUTION ACCEPTED"]
+
+RUNNING["200 EXECUTION RUNNING"]
+
+COMPLETED["200 EXECUTION COMPLETED"]
+
+STOPPED["200 EXECUTION STOPPED"]
+
+INTERRUPTED["202 EXECUTION INTERRUPTED"]
+
+LIMITEXCEEDED["422 RESOURCE LIMIT EXCEEDED"]
+
+BAD["400 BAD REQUEST"]
+
+FORBIDDEN["403 INVALID ATTEMPT"]
+
+NOTFOUND["404 EXECUTION NOT FOUND"]
+
+CONFLICT["409 OBSOLETE ATTEMPT"]
+
+SCHED -->|Trabajo asignado| R1
+ORQ -->|Solicita detener intento| R3
+ORQ -->|Consulta ejecucion| R2
+
+EXEC -->|Checkpoint programado| R4
+EXEC -->|Finalizacion tecnica| R5
+CAP -->|Aviso de interrupcion| R6
+
+R1 --> EXEC
+R2 --> EXEC
+R3 --> EXEC
+R4 --> EXEC
+R5 --> EXEC
+R6 --> EXEC
+
+EXEC -->|Nueva ejecucion| VALIDATE
+VALIDATE --> ORQ
+
+ORQ -->|Intento obsoleto| CONFLICT
+ORQ -->|Intento autorizado| PROFILE
+
+PROFILE --> ACT
+ACT -->|Rubrica y perfil versionados| RESOURCES
+
+RESOURCES --> CAP
+CAP -->|Recursos insuficientes| BAD
+CAP -->|Recursos disponibles| SOURCE
+
+SOURCE --> SUB
+SUB -->|Referencia de commit| GH
+
+GH -->|Codigo correspondiente al SHA| IMAGE
+
+IMAGE --> IMG
+IMG -->|Imagen base versionada| PREPARE
+
+PREPARE --> AWS
+AWS --> SANDBOX
+
+SANDBOX -->|Entorno preparado| RESTORE
+
+RESTORE --> CHECK
+CHECK -->|Progreso valido o inicio nuevo| RUN
+
+RUN --> SANDBOX
+SANDBOX --> LIMITS
+
+LIMITS -->|Recursos dentro de limites| PROGRESS
+LIMITS -->|Memoria o tiempo excedido| LIMITEXCEEDED
+
+PROGRESS --> EVIDENCE
+PROGRESS --> LLMCHECK
+
+LLMCHECK -->|No requiere LLM| RESULT
+LLMCHECK -->|Requiere LLM| TOKEN
+
+TOKEN -->|Presupuesto autorizado| LLMA
+LLMA -->|Resultado autorizado| RESULT
+TOKEN -->|Sin presupuesto| RESULT
+
+RESULT --> EVIDENCE
+RESULT --> FINISH
+
+FINISH --> ORQ
+ORQ -->|Resultado vigente aceptado| COMPLETED
+ORQ -->|Intento invalidado| CONFLICT
+
+EXEC -->|Checkpoint solicitado| CHECK
+CHECK -->|Checkpoint durable| PROGRESS
+
+EXEC -->|Cancelacion| STOP
+STOP --> SANDBOX
+STOP --> CLEAN
+
+EXEC -->|Interrupcion Spot| CHECK
+CHECK -->|Progreso conservado| INTERRUPTED
+
+LIMITEXCEEDED --> RESULT
+
+COMPLETED --> CLEAN
+INTERRUPTED --> CLEAN
+CONFLICT --> CLEAN
+
+CLEAN --> CAP
+
+EXEC -->|Metricas de ejecucion| OBS
+
+ACCEPTED --> SCHED
+RUNNING --> ORQ
+COMPLETED --> ORQ
+STOPPED --> ORQ
+INTERRUPTED --> ORQ
+LIMITEXCEEDED --> ORQ
+

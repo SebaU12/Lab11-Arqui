@@ -1,0 +1,183 @@
+graph LR
+
+PROF[PROFESOR]
+EST[ESTUDIANTE]
+
+GW[SPOTTY ENTRY - Web docente - Mobile estudiante]
+
+AUTH[ACCESS SERVICE - Identidad - Roles - Permisos por curso]
+
+COURSE[COURSE SERVICE - Cursos - Asignaciones docentes - Matriculas]
+
+CHAT[ACTIVITY CHAT SERVICE - Propuestas asistidas por LLM]
+
+ACT[ACTIVITY SERVICE - Crea actividades - Configura rubricas - Publica actividades - Gestiona deadlines - Versiona cambios - Solicita recalificacion]
+
+SUB[SUBMISSION SERVICE - Consulta actividades vigentes - Valida deadline de entrega]
+
+EVAL[EVALUATION ORCHESTRATOR - Genera nuevas evaluaciones - Conserva relacion con rubrica - Gestiona recalificaciones]
+
+DB[(ACADEMIC STORE - Actividades - Rubricas versionadas - Estado de publicacion - Fechas limite)]
+
+R1["POST /activities
+Body
+{
+ course_id: COURSE-101
+ title: Laboratorio 12
+ type: architecture
+ deadline: 2026-11-10T23:59:00-05:00
+}"]
+
+R2["PUT /activities/ACT-101/rubric
+Body
+{
+ criteria: [...]
+ weights: [...]
+ total_score: 20
+}"]
+
+R3["POST /activities/ACT-101/publish
+Body
+{
+ expected_version: 1
+}"]
+
+R4["GET /courses/COURSE-101/activities"]
+
+R5["GET /activities/ACT-101"]
+
+R6["PATCH /activities/ACT-101
+Body
+{
+ title: Laboratorio 12 actualizado
+ deadline: 2026-11-12T23:59:00-05:00
+ expected_version: 1
+}"]
+
+R7["POST /activities/from-proposal
+Body
+{
+ proposal_id: PROP-101
+ course_id: COURSE-101
+ teacher_confirmed: true
+}"]
+
+R8["GET /activities/ACT-101/evaluation-config"]
+
+VALIDATE[VALIDAR IDENTIDAD Y PERMISOS]
+
+COURSECHECK[VALIDAR CURSO Y PROFESOR ASIGNADO]
+
+STRUCTURE[VALIDAR DATOS DE ACTIVIDAD]
+
+RUBRIC[VALIDAR CRITERIOS Y PUNTAJES]
+
+VERSION[VALIDAR VERSION Y CONFLICTOS]
+
+PUBLISH[VALIDAR PUBLICACION]
+
+SAVE[GUARDAR ACTIVIDAD O NUEVA VERSION]
+
+RECALC[IDENTIFICAR ENTREGAS AFECTADAS]
+
+READ[CONSULTAR ACTIVIDADES AUTORIZADAS]
+
+CONFIG[OBTENER RUBRICA Y CONFIGURACION VIGENTE]
+
+CREATED[201 ACTIVITY CREATED]
+
+OK[200 OK]
+
+PUBLISHED[200 ACTIVITY PUBLISHED]
+
+UPDATED[200 ACTIVITY UPDATED]
+
+ACCEPTED[202 REGRADING REQUESTED]
+
+BAD[400 BAD REQUEST]
+
+UNAUTH[401 UNAUTHORIZED]
+
+FORBIDDEN[403 FORBIDDEN]
+
+NOTFOUND[404 NOT FOUND]
+
+CONFLICT[409 VERSION CONFLICT]
+
+PROF --> GW
+EST --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+GW --> R5
+GW --> R6
+
+CHAT -->|Propuesta aprobada por profesor| R7
+GW -->|Confirmacion docente| R7
+
+SUB -->|Consulta deadline y estado| R5
+EVAL -->|Consulta configuracion versionada| R8
+
+R1 --> ACT
+R2 --> ACT
+R3 --> ACT
+R4 --> ACT
+R5 --> ACT
+R6 --> ACT
+R7 --> ACT
+R8 --> ACT
+
+ACT -->|Solicitud de usuario| VALIDATE
+
+VALIDATE --> AUTH
+AUTH -->|Sesion invalida| UNAUTH
+AUTH -->|Sin permisos| FORBIDDEN
+AUTH -->|Autorizado| COURSECHECK
+
+COURSECHECK --> COURSE
+COURSE -->|Curso no existe| NOTFOUND
+COURSE -->|Vinculacion correcta| STRUCTURE
+
+STRUCTURE -->|Datos invalidos| BAD
+STRUCTURE --> RUBRIC
+
+RUBRIC -->|Rubrica invalida| BAD
+RUBRIC --> VERSION
+
+VERSION -->|Version obsoleta| CONFLICT
+VERSION -->|Version valida| SAVE
+
+SAVE --> DB
+DB --> CREATED
+DB --> UPDATED
+
+ACT -->|Solicitud de publicacion| PUBLISH
+PUBLISH --> DB
+PUBLISH -->|Configuracion incompleta| BAD
+PUBLISH -->|Publicacion valida| DB
+DB --> PUBLISHED
+
+ACT -->|Consulta autorizada| READ
+READ --> DB
+DB --> OK
+
+ACT -->|Consulta interna de evaluacion| CONFIG
+CONFIG --> DB
+DB -->|Rubrica y parametros versionados| EVAL
+
+ACT -->|Cambio relevante en rubrica publicada| RECALC
+RECALC --> EVAL
+EVAL -->|Recalificacion aceptada| ACCEPTED
+
+CREATED --> GW
+UPDATED --> GW
+PUBLISHED --> GW
+OK --> GW
+ACCEPTED --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+BAD --> GW
+NOTFOUND --> GW
+CONFLICT --> GW

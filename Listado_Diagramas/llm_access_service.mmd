@@ -1,0 +1,184 @@
+graph LR
+
+CHAT["ACTIVITY CHAT SERVICE - Solicita generacion - Refina actividades - Procesa propuestas"]
+
+EXEC["EXECUTION SERVICE - Solicita analisis LLM - Utiliza respuestas como evidencia"]
+
+LLMA["LLM ACCESS SERVICE - Centraliza llamadas LLM - Verifica reservas - Selecciona skill - Construye solicitudes - Valida respuestas - Reporta consumo"]
+
+AUTH["ACCESS SERVICE - Identidad tecnica - Permisos de servicios"]
+
+TOKEN["TOKEN BUDGET SERVICE - Reservas de tokens - Limites - Conciliacion de consumo"]
+
+ORQ["EVALUATION ORCHESTRATOR - Evaluacion logica - Intento vigente"]
+
+LLM["EXTERNAL LLM PROVIDER - Modelo GPT-4o-mini asumido - Skill activity-draft-v1 - Inferencia y generacion"]
+
+CONFIG[("LLM CONFIG STORE - Modelo permitido - Skills autorizados - Versiones - Esquemas de respuesta - Limites de contexto")]
+
+DB[("LLM REQUEST STORE - Request ID - Reservation ID - Contexto academico - Estado de solicitud - Uso reportado - Referencia de respuesta")]
+
+R1["POST /llm/generate-activity
+Body
+{
+ request_id: REQ-101
+ reservation_id: RES-101
+ session_id: CHAT-101
+ skill_id: activity-draft-v1
+ prompt: Crear laboratorio de escalabilidad
+}"]
+
+R2["POST /llm/refine-activity
+Body
+{
+ request_id: REQ-102
+ reservation_id: RES-102
+ session_id: CHAT-101
+ proposal_version: 2
+ instruction: Mejorar rubrica
+}"]
+
+R3["POST /llm/evaluate
+Body
+{
+ request_id: REQ-103
+ reservation_id: RES-103
+ evaluation_id: EVAL-101
+ attempt_id: ATT-101
+ evidence_ref: EVID-101
+}"]
+
+R4["GET /llm/requests/REQ-101"]
+
+R5["GET /llm/config/skills"]
+
+VALIDATE["VALIDAR SERVICIO SOLICITANTE"]
+
+RESERVE["VERIFICAR RESERVA DE TOKENS"]
+
+CONTEXT["VALIDAR CONTEXTO Y ALCANCE"]
+
+MODEL["SELECCIONAR MODELO Y SKILL AUTORIZADO"]
+
+LIMITS["VALIDAR LIMITES DE ENTRADA Y SALIDA"]
+
+BUILD["CONSTRUIR SOLICITUD ESTRUCTURADA"]
+
+SEND["ENVIAR SOLICITUD AL PROVEEDOR"]
+
+RECEIVE["RECIBIR RESPUESTA Y USO"]
+
+SCHEMA["VALIDAR FORMATO DE RESPUESTA"]
+
+RECONCILE["REPORTAR CONSUMO REAL"]
+
+SAVE["REGISTRAR RESULTADO DE SOLICITUD"]
+
+READ["CONSULTAR ESTADO AUTORIZADO"]
+
+SKILLS["CONSULTAR CONFIGURACION DISPONIBLE"]
+
+GENERATED["200 ACTIVITY PROPOSAL GENERATED"]
+
+REFINED["200 ACTIVITY PROPOSAL REFINED"]
+
+EVALUATED["200 LLM EVIDENCE GENERATED"]
+
+OK["200 REQUEST STATUS"]
+
+CONFIGOK["200 SKILL CONFIGURATION"]
+
+BAD["400 BAD REQUEST"]
+
+FORBIDDEN["403 LLM ACCESS DENIED"]
+
+EXHAUSTED["429 TOKEN BUDGET EXCEEDED"]
+
+CONFLICT["409 RESERVATION OR ATTEMPT CONFLICT"]
+
+INVALID["422 INVALID LLM RESPONSE"]
+
+UNAVAILABLE["503 LLM PROVIDER UNAVAILABLE"]
+
+CHAT -->|Generar propuesta| R1
+CHAT -->|Refinar propuesta| R2
+
+EXEC -->|Evaluacion asistida| R3
+
+CHAT -->|Consulta solicitud| R4
+EXEC -->|Consulta solicitud| R4
+CHAT -->|Consulta capacidades| R5
+
+R1 --> LLMA
+R2 --> LLMA
+R3 --> LLMA
+R4 --> LLMA
+R5 --> LLMA
+
+LLMA -->|Nueva solicitud| VALIDATE
+
+VALIDATE --> AUTH
+AUTH -->|Servicio no autorizado| FORBIDDEN
+AUTH -->|Servicio autorizado| RESERVE
+
+RESERVE --> TOKEN
+TOKEN -->|Reserva invalida| CONFLICT
+TOKEN -->|Presupuesto insuficiente| EXHAUSTED
+TOKEN -->|Reserva valida| CONTEXT
+
+CONTEXT -->|Evaluacion automatica| ORQ
+ORQ -->|Intento obsoleto| CONFLICT
+ORQ -->|Intento vigente| MODEL
+CONTEXT -->|Solicitud docente| MODEL
+
+MODEL --> CONFIG
+CONFIG -->|Modelo y skill permitido| LIMITS
+
+LIMITS -->|Limites excedidos| BAD
+LIMITS -->|Solicitud valida| BUILD
+
+BUILD --> DB
+BUILD --> SEND
+
+SEND --> LLM
+LLM -->|Proveedor no disponible| UNAVAILABLE
+LLM -->|Respuesta generada| RECEIVE
+
+RECEIVE --> RECONCILE
+RECONCILE --> TOKEN
+
+RECEIVE --> SCHEMA
+SCHEMA -->|Respuesta invalida| INVALID
+SCHEMA -->|Respuesta valida| SAVE
+
+SAVE --> DB
+
+DB -->|Propuesta nueva| GENERATED
+DB -->|Propuesta refinada| REFINED
+DB -->|Evidencia LLM| EVALUATED
+
+LLMA -->|Consulta de solicitud| READ
+READ --> DB
+DB --> OK
+
+LLMA -->|Consulta de skills| SKILLS
+SKILLS --> CONFIG
+CONFIG --> CONFIGOK
+
+GENERATED --> CHAT
+REFINED --> CHAT
+EVALUATED --> EXEC
+
+OK --> CHAT
+OK --> EXEC
+
+CONFIGOK --> CHAT
+CONFLICT --> CHAT
+CONFLICT --> EXEC
+EXHAUSTED --> CHAT
+EXHAUSTED --> EXEC
+INVALID --> CHAT
+INVALID --> EXEC
+UNAVAILABLE --> CHAT
+UNAVAILABLE --> EXEC
+

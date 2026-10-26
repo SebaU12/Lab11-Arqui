@@ -1,0 +1,200 @@
+graph LR
+
+LEGCLIENT["LEGACY CLIENT - Aplicacion anterior de Arquitectura - Consumidores de API v1"]
+
+PROF["PROFESOR - Consulta cursos y resultados historicos"]
+
+EST["ESTUDIANTE - Consulta entregas y notas permitidas"]
+
+GW["SPOTTY ENTRY - Entrada web y mobile - Solicitudes legacy y nuevas"]
+
+LEG["LEGACY COMPATIBILITY SERVICE - Mantiene contratos legacy v1 - Identifica propietario academico - Traduce solicitudes y respuestas - Evita duplicados - Coordina migracion - Conserva referencias historicas"]
+
+AUTH["ACCESS SERVICE - Identidad - Autorizacion - Permisos academicos"]
+
+COURSE["COURSE SERVICE - Cursos - Matriculas - Asignaciones docentes"]
+
+SUB["SUBMISSION SERVICE - Entregas nuevas - Commit SHA - Version vigente"]
+
+ORQ["EVALUATION ORCHESTRATOR - Evaluaciones nuevas - Estados - Intentos"]
+
+GRADE["GRADE REVIEW SERVICE - Notas oficiales de Spotty - Historial publicado"]
+
+OLD["LEGACY ARCHITECTURE SYSTEM - Evaluador anterior - Contratos originales - Entregas historicas - Resultados originales"]
+
+OLDDB[("LEGACY DATABASE - Entregas anteriores - Evaluaciones anteriores - Calificaciones historicas")]
+
+MAPDB[("MIGRATION MAPPING STORE - Legacy ID - Spotty ID - Curso propietario - Estado de migracion - Version de contrato - Correspondencias")]
+
+CONTROL[("MIGRATION CONTROL STORE - Etapa de migracion - Curso o cohorte - Destino de escritura - Estado de corte - Registro de reconciliacion")]
+
+R1["POST /legacy/v1/submissions
+Body
+{
+ course_id: LEG-COURSE-101
+ student_id: E-205
+ repository_url: https://github.com/student/project
+}"]
+
+R2["GET /legacy/v1/submissions/LEG-SUB-101"]
+
+R3["GET /legacy/v1/results/LEG-SUB-101"]
+
+R4["GET /legacy/mappings/LEG-SUB-101"]
+
+R5["POST /legacy/migrations/validate
+Body
+{
+ course_id: LEG-COURSE-101
+}"]
+
+R6["POST /legacy/migrations/cutover
+Body
+{
+ course_id: LEG-COURSE-101
+ target: SPOTTY
+}"]
+
+R7["POST /legacy/migrations/rollback
+Body
+{
+ course_id: LEG-COURSE-101
+ target: LEGACY
+}"]
+
+CONTRACT["VALIDAR CONTRATO LEGACY V1"]
+
+IDENTITY["VALIDAR IDENTIDAD Y ACCESO"]
+
+OWNER["IDENTIFICAR FUENTE DE VERDAD"]
+
+ROUTE{"DETERMINAR SISTEMA PROPIETARIO"}
+
+TRANSLATE["TRADUCIR SOLICITUD Y RESPUESTA"]
+
+LEGACYWRITE["PROCESAR SOLICITUD EN LEGACY"]
+
+SPOTTYWRITE["PROCESAR SOLICITUD EN SPOTTY"]
+
+HISTORY["CONSULTAR REGISTRO HISTORICO"]
+
+MAP["RESOLVER IDENTIFICADORES"]
+
+VALIDATE["VALIDAR CORRESPONDENCIAS Y CONSISTENCIA"]
+
+CUTOVER["VALIDAR Y REGISTRAR CAMBIO DE PROPIETARIO"]
+
+ROLLBACK["VALIDAR Y RESTAURAR RUTA ANTERIOR"]
+
+RECONCILE["COMPROBAR ENTREGAS Y RESULTADOS"]
+
+OK["200 LEGACY RESPONSE"]
+
+ACCEPTED["202 MIGRATION REQUEST ACCEPTED"]
+
+CREATED["201 SUBMISSION ACCEPTED"]
+
+MAPPING["200 MAPPING FOUND"]
+
+VALIDATED["200 MIGRATION VALIDATED"]
+
+CHANGED["200 CUTOVER COMPLETED"]
+
+RESTORED["200 ROLLBACK COMPLETED"]
+
+BAD["400 BAD REQUEST"]
+
+UNAUTH["401 UNAUTHORIZED"]
+
+FORBIDDEN["403 FORBIDDEN"]
+
+NOTFOUND["404 NOT FOUND"]
+
+CONFLICT["409 OWNERSHIP OR MIGRATION CONFLICT"]
+
+UNAVAILABLE["503 OWNER SYSTEM UNAVAILABLE"]
+
+LEGCLIENT --> GW
+PROF --> GW
+EST --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+
+R1 --> LEG
+R2 --> LEG
+R3 --> LEG
+
+R4 --> LEG
+R5 --> LEG
+R6 --> LEG
+R7 --> LEG
+
+LEG -->|Solicitud legacy| CONTRACT
+CONTRACT -->|Contrato invalido| BAD
+CONTRACT -->|Contrato valido| IDENTITY
+
+IDENTITY --> AUTH
+AUTH -->|No autenticado| UNAUTH
+AUTH -->|Sin permisos| FORBIDDEN
+AUTH -->|Autorizado| OWNER
+
+OWNER --> MAPDB
+OWNER --> CONTROL
+OWNER --> COURSE
+OWNER --> ROUTE
+
+ROUTE -->|Propietario LEGACY| LEGACYWRITE
+ROUTE -->|Propietario SPOTTY| SPOTTYWRITE
+ROUTE -->|Propietario ambiguo| CONFLICT
+
+LEGACYWRITE --> OLD
+OLD --> OLDDB
+OLDDB -->|Resultado original| TRANSLATE
+
+SPOTTYWRITE --> SUB
+SPOTTYWRITE --> ORQ
+SUB -->|Entrega registrada| TRANSLATE
+
+LEG -->|Consulta historica| HISTORY
+HISTORY --> MAPDB
+HISTORY --> OLD
+HISTORY --> GRADE
+OLD -->|Resultado legacy| TRANSLATE
+GRADE -->|Nota publicada Spotty| TRANSLATE
+
+TRANSLATE -->|Respuesta compatible v1| OK
+TRANSLATE -->|Entrega aceptada| CREATED
+
+LEG -->|Consulta de correspondencia| MAP
+MAP --> MAPDB
+MAPDB --> MAPPING
+
+LEG -->|Preparar migracion| VALIDATE
+VALIDATE --> RECONCILE
+RECONCILE --> OLDDB
+RECONCILE --> SUB
+RECONCILE --> GRADE
+RECONCILE -->|Datos consistentes| VALIDATED
+RECONCILE -->|Diferencias criticas| CONFLICT
+
+LEG -->|Cambio de propietario autorizado| CUTOVER
+CUTOVER --> CONTROL
+CUTOVER --> MAPDB
+CONTROL --> CHANGED
+
+LEG -->|Recuperacion autorizada| ROLLBACK
+ROLLBACK --> CONTROL
+ROLLBACK --> MAPDB
+CONTROL --> RESTORED
+
+OK --> GW
+CREATED --> GW
+BAD --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> GW
+UNAVAILABLE --> GW
+

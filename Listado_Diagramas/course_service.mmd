@@ -1,0 +1,147 @@
+graph LR
+
+PROF[PROFESOR]
+EST[ESTUDIANTE]
+
+GW[SPOTTY ENTRY - Entrada web y mobile]
+
+COURSE[COURSE SERVICE - Gestiona cursos - Vincula estudiantes - Desvincula estudiantes - Consulta matriculas - Gestiona asignaciones docentes - Proporciona contexto academico]
+
+AUTH[ACCESS SERVICE - Identidad - Roles - Permisos - Autorizacion por curso]
+
+ACT[ACTIVITY SERVICE - Actividades asociadas al curso]
+
+DB[(ACADEMIC STORE - Cursos - Profesores asignados - Matriculas - Relaciones academicas)]
+
+R1["POST /courses
+Body
+{
+ name: Arquitectura de Software
+ code: ARQ-101
+ professor_id: P-101
+}"]
+
+R2["GET /courses
+Query
+{
+ user_id: U-102
+}"]
+
+R3["GET /courses/COURSE-101"]
+
+R4["POST /courses/COURSE-101/students
+Body
+{
+ student_id: E-205
+}"]
+
+R5["DELETE /courses/COURSE-101/students/E-205"]
+
+R6["GET /courses/COURSE-101/students"]
+
+R7["GET /courses/COURSE-101/membership
+Query
+{
+ user_id: E-205
+}"]
+
+VALIDATE[VALIDAR IDENTIDAD Y PERMISOS]
+
+CREATE[VALIDAR DATOS DEL CURSO]
+
+FIND[CONSULTAR CURSOS AUTORIZADOS]
+
+MEMBERSHIP[VALIDAR VINCULACION ACADEMICA]
+
+ENROLL[REGISTRAR MATRICULA]
+
+UNENROLL[DESVINCULAR ESTUDIANTE]
+
+STUDENTS[OBTENER NOMINA DEL CURSO]
+
+CHECKCOURSE[VALIDAR EXISTENCIA DEL CURSO]
+
+CREATED[201 COURSE CREATED]
+
+OK[200 OK]
+
+ENROLLED[200 STUDENT ENROLLED]
+
+REMOVED[200 STUDENT REMOVED]
+
+NOTFOUND[404 NOT FOUND]
+
+FORBIDDEN[403 FORBIDDEN]
+
+CONFLICT[409 CONFLICT]
+
+BADREQUEST[400 BAD REQUEST]
+
+PROF --> GW
+EST --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+GW --> R5
+GW --> R6
+
+AUTH -->|Consulta vinculacion del usuario| R7
+ACT -->|Consulta existencia del curso| R3
+
+R1 --> COURSE
+R2 --> COURSE
+R3 --> COURSE
+R4 --> COURSE
+R5 --> COURSE
+R6 --> COURSE
+R7 --> COURSE
+
+COURSE -->|Operaciones de usuario| VALIDATE
+VALIDATE --> AUTH
+
+AUTH -->|Acceso permitido| CREATE
+AUTH -->|Acceso permitido| FIND
+AUTH -->|Acceso permitido| CHECKCOURSE
+AUTH -->|Acceso permitido| ENROLL
+AUTH -->|Acceso permitido| UNENROLL
+AUTH -->|Acceso permitido| STUDENTS
+AUTH -->|Acceso denegado| FORBIDDEN
+
+CREATE -->|Datos invalidos| BADREQUEST
+CREATE -->|Curso duplicado| CONFLICT
+CREATE -->|Datos validos| DB
+DB --> CREATED
+
+FIND --> DB
+DB -->|Lista de cursos| OK
+
+CHECKCOURSE --> DB
+DB -->|Curso encontrado| OK
+DB -->|Curso inexistente| NOTFOUND
+
+ENROLL --> MEMBERSHIP
+MEMBERSHIP -->|Matricula existente| CONFLICT
+MEMBERSHIP -->|Matricula valida| DB
+DB --> ENROLLED
+
+UNENROLL --> DB
+DB -->|Vinculacion existente eliminada| REMOVED
+DB -->|Vinculacion inexistente| NOTFOUND
+
+STUDENTS --> DB
+DB -->|Nomina del curso| OK
+
+COURSE -->|Consulta interna de vinculacion| DB
+DB -->|Estado de matricula y asignacion| AUTH
+
+CREATED --> GW
+OK --> GW
+ENROLLED --> GW
+REMOVED --> GW
+FORBIDDEN --> GW
+CONFLICT --> GW
+BADREQUEST --> GW
+NOTFOUND --> GW
+

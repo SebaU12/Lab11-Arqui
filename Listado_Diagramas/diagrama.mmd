@@ -1,0 +1,188 @@
+graph LR
+%% SPOTTY - SEGUNDA ITERACION: ARQUITECTURA LOGICA CONSOLIDADA
+%% 16 servicios, almacenes originales, flujos esenciales, sin mecanismos de Reliability.
+%% Servicios logicos NO implican despliegues independientes. Colas son recursos logicos.
+
+subgraph CLIENTES["ACTORES Y ENTRADA"]
+  PROF["PROFESOR - Web desktop"]
+  EST["ESTUDIANTE - Mobile"]
+  LEGCLIENT["CLIENTE LEGACY - Contratos v1"]
+  GW["SPOTTY ENTRY - API / Web / Mobile"]
+  PROF --> GW
+  EST --> GW
+  LEGCLIENT --> GW
+end
+
+subgraph ACADEMICO["DOMINIO ACADEMICO"]
+  AUTH["1. ACCESS SERVICE - Login, roles y autorizacion"]
+  COURSE["2. COURSE SERVICE - Cursos, matriculas, docentes"]
+  ACT["3. ACTIVITY SERVICE - Actividades, deadlines, rubricas versionadas"]
+  CHAT["4. ACTIVITY CHAT SERVICE - Sesiones y propuestas editables"]
+  SUB["5. SUBMISSION SERVICE - GitHub SHA, recepcion, version vigente"]
+  REVIEW["12. GRADE REVIEW SERVICE - Revision, aprobacion y publicacion"]
+  AUTHDB[("AUTHORIZATION STORE")]
+  ACDB[("ACADEMIC STORE - Cursos / Matriculas / Actividades / Rubricas")]
+  CHATDB[("CHAT SESSION STORE")]
+  SUBDB[("SUBMISSION STORE - SHA / Timestamp / Historial / Vigencia")]
+  REVIEWDB[("GRADE REVIEW STORE")]
+  PUBDB[("PUBLISHED GRADE STORE")]
+  AUTH --> AUTHDB
+  COURSE --> ACDB
+  ACT --> ACDB
+  CHAT --> CHATDB
+  SUB --> SUBDB
+  REVIEW --> REVIEWDB
+  REVIEW --> PUBDB
+end
+
+subgraph PROCESAMIENTO["EVALUACION Y EJECUCION"]
+  ORQ["6. EVALUATION ORCHESTRATOR - Evaluaciones, intentos, estados, vigencia"]
+  SCHED["7. EVALUATION SCHEDULER - Prioridad, justicia, asignacion"]
+  CAP["8. SPOT CAPACITY SERVICE - Pools CPU/GPU, instancias y recursos"]
+  EXEC["9. EXECUTION SERVICE - Pruebas, microVM, limites, evidencia"]
+  CKPT["10. CHECKPOINT SERVICE - Persistencia y recuperacion de progreso"]
+  GRADE["11. GRADING SERVICE - Nota provisional y confidence level"]
+  EVALDB[("EVALUATION STATE STORE")]
+  CPUQ[("CPU EVALUATION QUEUE - Programacion / Arquitectura")]
+  GPUQ[("GPU EVALUATION QUEUE - IA")]
+  QUEUEDB[("QUEUE STORE")]
+  CAPDB[("CAPACITY STATE STORE")]
+  EVIDDB[("EXECUTION EVIDENCE STORE")]
+  CKPTDB[("CHECKPOINT METADATA STORE")]
+  CKPTSTORE[("CHECKPOINT STORAGE - Durable fuera de Spot")]
+  GRADEDB[("GRADING STORE - Nota provisional / Confianza / Justificacion")]
+  ORQ --> EVALDB
+  SCHED --> QUEUEDB
+  SCHED --> CPUQ
+  SCHED --> GPUQ
+  CAP --> CAPDB
+  EXEC --> EVIDDB
+  CKPT --> CKPTDB
+  CKPT --> CKPTSTORE
+  GRADE --> GRADEDB
+end
+
+subgraph INTELIGENCIA["ASISTENCIA LLM Y CONTROL DE TOKENS"]
+  TOKEN["13. TOKEN BUDGET SERVICE - Cuotas, reserva atomica, conciliacion"]
+  LLMA["14. LLM ACCESS SERVICE - Modelo y skill autorizados, solicitud, uso"]
+  TPOL[("TOKEN POLICY STORE")]
+  TBUD[("TOKEN BUDGET STORE")]
+  TLED[("TOKEN RESERVATION LEDGER")]
+  LCFG[("LLM CONFIG STORE")]
+  LREQ[("LLM REQUEST STORE")]
+  TOKEN --> TPOL
+  TOKEN --> TBUD
+  TOKEN --> TLED
+  LLMA --> LCFG
+  LLMA --> LREQ
+end
+
+subgraph INTEGRACION["NOTIFICACIONES Y COEXISTENCIA LEGACY"]
+  NOTIF["15. NOTIFICATION SERVICE - Eventos, destinos, push, alertas 48h"]
+  LEG["16. LEGACY COMPATIBILITY SERVICE - v1, propiedad, migracion, rollback"]
+  NOTDB[("NOTIFICATION STORE")]
+  DEVICE[("DEVICE REGISTRATION STORE")]
+  LEGDB[("LEGACY DATABASE - Fuente historica")]
+  MAPDB[("MIGRATION MAPPING STORE")]
+  CTRLDB[("MIGRATION CONTROL STORE")]
+  NOTIF --> NOTDB
+  NOTIF --> DEVICE
+  LEG --> MAPDB
+  LEG --> CTRLDB
+end
+
+subgraph EXTERNOS["SISTEMAS Y RECURSOS EXTERNOS"]
+  IDP["IDENTITY PROVIDER - Identidad institucional"]
+  GH["GITHUB - Codigo por commit SHA"]
+  IMG["IMAGE REGISTRY - Bases por curso 3-5 GB"]
+  AWS["AWS EC2 SPOT - Solo Spot, CPU/GPU, interrupcion posible"]
+  MICRO["MICROVM SANDBOX - Codigo no confiable"]
+  LLM["EXTERNAL LLM PROVIDER - Skill activity-draft-v1"]
+  PUSH["EXTERNAL PUSH PROVIDER"]
+  OLD["LEGACY ARCHITECTURE SYSTEM"]
+  OLD --> LEGDB
+  AWS --> MICRO
+end
+
+%% ENTRADA Y CONTROL DE ACCESO
+GW -->|"POST /auth/login; /auth/logout"| AUTH
+AUTH -->|"Verificar identidad"| IDP
+AUTH -->|"Matricula / profesor asignado"| COURSE
+GW -->|"Cursos y matriculas"| COURSE
+GW -->|"Crear / editar / publicar actividad y rubrica"| ACT
+GW -->|"Chat docente y propuestas"| CHAT
+GW -->|"POST /activities/id/submissions; consultas"| SUB
+GW -->|"Revision docente y notas publicadas"| REVIEW
+GW -->|"Notificaciones propias / dispositivos"| NOTIF
+GW -->|"/legacy/v1/*"| LEG
+COURSE -->|"Curso y vinculacion"| ACT
+ACT -->|"Configuracion y deadline"| SUB
+AUTH -->|"Permisos academicos"| REVIEW
+
+%% CHAT DOCENTE: PROPONE, NO PUBLICA
+CHAT -->|"Profesor / curso autorizado"| AUTH
+CHAT -->|"Reserva para generacion y refinamiento"| TOKEN
+CHAT -->|"Generar/refinar propuesta"| LLMA
+LLMA -->|"Propuesta estructurada"| CHAT
+CHAT -->|"Propuesta y confirmacion docente"| ACT
+ACT -->|"Nueva rubrica: solicitar recalificacion"| ORQ
+
+%% ENTREGA: SHA, ULTIMA VALIDA Y ADMISION ASINCRONA
+SUB -->|"Resolver commit inmutable"| GH
+SUB -->|"Verificar matricula"| COURSE
+SUB -->|"Entrega vigente / reentrega / reemplazo"| ORQ
+ORQ -->|"Consultar entrega y version"| SUB
+ORQ -->|"Consultar rubrica versionada"| ACT
+
+%% ORQUESTACION - PLANIFICACION - CAPACIDAD
+ORQ -->|"Encolar evaluacion autorizada / recuperar"| SCHED
+SCHED -->|"Perfil CPU / GPU y demanda"| CAP
+CAP -->|"Solicitar, registrar o liberar capacidad"| AWS
+CAP -->|"Workers y slots realmente disponibles"| SCHED
+SCHED -->|"Seleccionar trabajo e intento"| ORQ
+ORQ -->|"Intento / lease autorizado"| EXEC
+SCHED -->|"Despachar al worker compatible"| EXEC
+CAP -->|"Aviso de interrupcion o perdida"| ORQ
+CAP -->|"Instancia no asignable"| SCHED
+
+%% EJECUCION SEGURA - CHECKPOINTS - RESULTADO
+EXEC -->|"Recuperar codigo SHA"| GH
+EXEC -->|"Imagen versionada por curso"| IMG
+EXEC -->|"Ejecutar con limites CPU/GPU/RAM/tiempo"| MICRO
+EXEC -->|"Guardar progreso y consultar restauracion"| CKPT
+CKPT -->|"Ultimo checkpoint durable compatible"| EXEC
+ORQ -->|"Solicitar progreso recuperable"| CKPT
+EXEC -->|"Heartbeat / resultado por intento"| ORQ
+ORQ -->|"Resultado tecnico vigente"| GRADE
+GRADE -->|"Consultar evidencias por criterio"| EVIDDB
+GRADE -->|"Criterios y ponderaciones"| ACT
+GRADE -->|"Verificar entrega vigente"| SUB
+GRADE -->|"Provisional, confianza, inconcluso"| REVIEW
+REVIEW -->|"Consultar intento y vigencia"| ORQ
+REVIEW -->|"Verificar ultimo SHA"| SUB
+
+%% PRESUPUESTO LLM: IDENTIDAD LOGICA SE CONSERVA ENTRE INTENTOS
+EXEC -->|"Reserva para evaluacion logica"| TOKEN
+EXEC -->|"Analisis LLM autorizado"| LLMA
+LLMA -->|"Verificar reserva y conciliar uso"| TOKEN
+LLMA -->|"Skill/modelo y resultado"| LLM
+TOKEN -->|"Evaluation ID persiste entre intentos"| ORQ
+
+%% EVENTOS ACADEMICOS Y ALERTAS
+ORQ -->|"Estados relevantes"| NOTIF
+REVIEW -->|"Nota ya publicada"| NOTIF
+SCHED -->|"Cola / espera / riesgo 48h"| NOTIF
+CAP -->|"Escasez CPU/GPU"| NOTIF
+NOTIF -->|"Push a destinatarios autorizados"| PUSH
+NOTIF -->|"Roles y matriculas"| COURSE
+
+%% COMPATIBILIDAD LEGACY - UN PROPIETARIO POR CURSO/COHORTE
+LEG -->|"Resolver propietario y mapeos"| COURSE
+LEG -->|"Ruta legacy para no migrados"| OLD
+LEG -->|"Entregas de cursos migrados"| SUB
+LEG -->|"Resultados publicados migrados"| REVIEW
+LEG -->|"Estado de evaluacion migrada"| ORQ
+
+%% NOTAS DE DISEÑO: sin retries, CB, caching, LB, healthchecks ni autoscaling.
+%% RF-011 historial visible y RF-040/044/045 funciones avanzadas son Nice to Have.
+

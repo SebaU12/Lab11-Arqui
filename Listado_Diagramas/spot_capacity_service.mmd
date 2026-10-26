@@ -1,0 +1,181 @@
+graph LR
+
+SCHED["EVALUATION SCHEDULER - Demanda CPU y GPU - Trabajos pendientes - Espera estimada - Solicita capacidad compatible"]
+
+ORQ["EVALUATION ORCHESTRATOR - Estados de evaluacion - Intentos autorizados - Gestion de interrupciones"]
+
+EXEC["EXECUTION SERVICE - Workers CPU y GPU - Ejecuciones activas - Consumo de recursos"]
+
+CAP["SPOT CAPACITY SERVICE - Administra pools CPU y GPU - Calcula capacidad requerida - Solicita instancias AWS Spot - Registra disponibilidad - Controla recursos - Gestiona reduccion y perdida de capacidad"]
+
+AWS["AWS EC2 SPOT - Solicitudes de capacidad - Instancias CPU y GPU - Estado de instancias - Eventos de interrupcion"]
+
+OBS["OBSERVABILITY SERVICE - Instancias solicitadas - Capacidad efectiva - Utilizacion CPU GPU memoria - Interrupciones - Saturacion - Riesgo de plazo"]
+
+NOTIF["NOTIFICATION SERVICE - Alerta de falta de capacidad - Riesgo del plazo academico"]
+
+DB[("CAPACITY STATE STORE - Inventario de instancias - Pool CPU GPU - Estado de capacidad - Recursos disponibles - Solicitudes de capacidad - Asignaciones de workers")]
+
+R1["POST /capacity/demand
+Body
+{
+ pool: CPU
+ pending_jobs: 120
+ estimated_wait_minutes: 8
+}"]
+
+R2["POST /capacity/reconcile
+Body
+{
+ pool: CPU
+}"]
+
+R3["GET /capacity/pools"]
+
+R4["GET /capacity/workers/available
+Query
+{
+ pool: GPU
+}"]
+
+R5["POST /capacity/spot-events
+Body
+{
+ instance_id: i-123
+ event_type: INTERRUPTION_NOTICE
+}"]
+
+R6["POST /capacity/workers/heartbeat
+Body
+{
+ worker_id: WORK-CPU-01
+ instance_id: i-123
+}"]
+
+R7["POST /capacity/scale-in
+Body
+{
+ pool: CPU
+}"]
+
+DEMAND["OBTENER DEMANDA Y RECURSOS REQUERIDOS"]
+
+CALCULATE["CALCULAR CAPACIDAD OBJETIVO - Minimo 2 con demanda - Maximo 12 CPU - Maximo 6 GPU"]
+
+LIMIT["VALIDAR PRESUPUESTO - Cuotas - Compatibilidad - Limites de memoria"]
+
+DECIDE{"COMPARAR CAPACIDAD ACTUAL Y OBJETIVO"}
+
+SCALEOUT["SOLICITAR AMPLIACION SPOT"]
+
+KEEP["MANTENER CAPACIDAD"]
+
+SCALEIN["IDENTIFICAR INSTANCIAS SIN TRABAJO"]
+
+SELECT["SELECCIONAR PERFIL COMPATIBLE - CPU o GPU - Memoria - Familia - Zona - Region"]
+
+REGISTER["REGISTRAR ESTADO DE INSTANCIA"]
+
+AVAILABLE["CALCULAR SLOTS DISPONIBLES"]
+
+HEART["ACTUALIZAR ESTADO DEL WORKER"]
+
+INTERRUPT["IDENTIFICAR INSTANCIA AFECTADA"]
+
+DRAIN["MARCAR INSTANCIA NO ASIGNABLE"]
+
+RELEASE["SOLICITAR LIBERACION DE INSTANCIA"]
+
+ALERT["DETECTAR CAPACIDAD INSUFICIENTE"]
+
+OK["200 CAPACITY STATUS"]
+
+ACCEPTED["202 CAPACITY REQUESTED"]
+
+WAIT["202 CAPACITY UNAVAILABLE"]
+
+DRAINING["200 INSTANCE DRAINING"]
+
+RELEASED["200 SCALE IN REQUESTED"]
+
+BAD["400 BAD REQUEST"]
+
+CONFLICT["409 ACTIVE WORKLOAD"]
+
+SCHED -->|Comunica demanda| R1
+CAP -->|Revision periodica| R2
+
+SCHED -->|Consulta capacidad| R3
+SCHED -->|Busca worker compatible| R4
+
+AWS -->|Evento de interrupcion| R5
+EXEC -->|Reporta estado del worker| R6
+
+CAP -->|Reduccion autorizada| R7
+
+R1 --> CAP
+R2 --> CAP
+R3 --> CAP
+R4 --> CAP
+R5 --> CAP
+R6 --> CAP
+R7 --> CAP
+
+CAP -->|Demanda actual| DEMAND
+DEMAND --> SCHED
+SCHED -->|Colas y espera| CALCULATE
+
+CALCULATE --> LIMIT
+LIMIT --> DB
+LIMIT --> DECIDE
+
+DECIDE -->|Falta capacidad| SELECT
+DECIDE -->|Capacidad suficiente| KEEP
+DECIDE -->|Capacidad excedente| SCALEIN
+
+SELECT --> SCALEOUT
+SCALEOUT --> AWS
+
+AWS -->|Solicitud aceptada| REGISTER
+AWS -->|Sin capacidad Spot| ALERT
+
+REGISTER --> DB
+REGISTER --> ACCEPTED
+
+KEEP --> DB
+KEEP --> OK
+
+SCALEIN --> DB
+SCALEIN -->|Instancia libre| RELEASE
+SCALEIN -->|Trabajo activo| CONFLICT
+
+RELEASE --> AWS
+AWS -->|Liberacion solicitada| RELEASED
+
+CAP -->|Consulta de workers| AVAILABLE
+AVAILABLE --> DB
+DB -->|Slots CPU GPU disponibles| OK
+
+CAP -->|Heartbeat| HEART
+HEART --> DB
+
+CAP -->|Interrupcion| INTERRUPT
+INTERRUPT --> DB
+INTERRUPT --> DRAIN
+
+DRAIN --> SCHED
+DRAIN --> ORQ
+DRAIN --> EXEC
+DRAIN --> DRAINING
+
+ALERT --> DB
+ALERT --> WAIT
+ALERT --> NOTIF
+
+CAP -->|Metricas de capacidad| OBS
+
+OK --> SCHED
+ACCEPTED --> SCHED
+WAIT --> SCHED
+CONFLICT --> SCHED
+

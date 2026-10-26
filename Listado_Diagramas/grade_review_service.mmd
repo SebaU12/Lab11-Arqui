@@ -1,0 +1,221 @@
+graph LR
+
+PROF["PROFESOR - Revisa evaluaciones - Corrige notas - Aprueba y publica"]
+
+EST["ESTUDIANTE - Consulta calificaciones publicadas"]
+
+GW["SPOTTY ENTRY - Web docente - Mobile estudiante"]
+
+AUTH["ACCESS SERVICE - Identidad - Roles - Permisos por curso"]
+
+COURSE["COURSE SERVICE - Profesores asignados - Matriculas"]
+
+REVIEW["GRADE REVIEW SERVICE - Gestiona revisiones - Consulta evidencia y confianza - Registra correcciones - Aprueba notas - Publica calificaciones - Conserva historial - Controla recalificaciones"]
+
+GRADE["GRADING SERVICE - Notas provisionales - Confidence level - Resultados no concluyentes"]
+
+ORQ["EVALUATION ORCHESTRATOR - Estados de evaluacion - Intentos autorizados - Recalificaciones"]
+
+SUB["SUBMISSION SERVICE - Entrega vigente - Commit SHA - Versiones"]
+
+ACT["ACTIVITY SERVICE - Actividades - Rubricas versionadas - Deadlines"]
+
+NOTIF["NOTIFICATION SERVICE - Notificacion de calificaciones publicadas"]
+
+EVIDENCE[("EXECUTION EVIDENCE STORE - Pruebas - Resultados por criterio - Evidencias tecnicas")]
+
+GRADINGDB[("GRADING STORE - Notas provisionales - Confianza - Justificaciones")]
+
+REVIEWDB[("GRADE REVIEW STORE - Revisiones docentes - Correcciones justificadas - Estado de aprobacion")]
+
+GRADEDB[("PUBLISHED GRADE STORE - Notas oficiales - Versiones publicadas - Historial de publicaciones")]
+
+R1["GET /grade-reviews
+Query
+{
+ course_id: COURSE-101
+ status: PENDING
+}"]
+
+R2["GET /grade-reviews/EVAL-101"]
+
+R3["POST /grade-reviews/EVAL-101/adjust
+Body
+{
+ adjusted_score: 17
+ reason: Evidencia revisada por profesor
+ expected_version: 1
+}"]
+
+R4["POST /grade-reviews/EVAL-101/approve
+Body
+{
+ expected_version: 2
+}"]
+
+R5["POST /grade-reviews/EVAL-101/publish
+Body
+{
+ expected_version: 3
+}"]
+
+R6["GET /grades/activities/ACT-101/students/E-205"]
+
+R7["GET /grade-reviews/regrading
+Query
+{
+ activity_id: ACT-101
+}"]
+
+VALIDATE["VALIDAR IDENTIDAD Y PERMISOS"]
+
+ASSIGN["VERIFICAR PROFESOR AUTORIZADO"]
+
+CURRENT["VALIDAR ENTREGA VIGENTE Y RUBRICA"]
+
+LOAD["OBTENER NOTA PROVISIONAL Y CONFIANZA"]
+
+EVID["OBTENER EVIDENCIAS TECNICAS"]
+
+CHECK["IDENTIFICAR EVALUACION COMPLETA O NO CONCLUYENTE"]
+
+ADJUST["VALIDAR CORRECCION Y JUSTIFICACION"]
+
+APPROVE["VALIDAR APROBACION DOCENTE"]
+
+PUBLISH["VALIDAR PUBLICACION AUTORIZADA"]
+
+SAVE["GUARDAR REVISION O AJUSTE"]
+
+OFFICIAL["REGISTRAR NUEVA VERSION DE NOTA OFICIAL"]
+
+HISTORY["CONSERVAR PUBLICACION ANTERIOR"]
+
+READ["CONSULTAR NOTA PUBLICADA"]
+
+REGRADING["CONSULTAR RECALIFICACIONES"]
+
+REVIEWOK["200 REVIEW DETAILS"]
+
+ADJUSTED["200 GRADE ADJUSTED"]
+
+APPROVED["200 GRADE APPROVED"]
+
+PUBLISHED["200 GRADE PUBLISHED"]
+
+OK["200 PUBLISHED GRADE"]
+
+PENDING["200 REGRADING STATUS"]
+
+BAD["400 BAD REQUEST"]
+
+UNAUTH["401 UNAUTHORIZED"]
+
+FORBIDDEN["403 FORBIDDEN"]
+
+NOTFOUND["404 NOT FOUND"]
+
+CONFLICT["409 VERSION OR EVALUATION CONFLICT"]
+
+INCONCLUSIVE["409 REVIEW REQUIRED"]
+
+PROF --> GW
+EST --> GW
+
+GW --> R1
+GW --> R2
+GW --> R3
+GW --> R4
+GW --> R5
+GW --> R6
+GW --> R7
+
+R1 --> REVIEW
+R2 --> REVIEW
+R3 --> REVIEW
+R4 --> REVIEW
+R5 --> REVIEW
+R6 --> REVIEW
+R7 --> REVIEW
+
+REVIEW -->|Operacion docente| VALIDATE
+
+VALIDATE --> AUTH
+
+AUTH -->|Identidad invalida| UNAUTH
+AUTH -->|Permiso denegado| FORBIDDEN
+AUTH -->|Profesor autorizado| ASSIGN
+
+ASSIGN --> COURSE
+COURSE -->|Sin asignacion docente| FORBIDDEN
+COURSE -->|Asignacion valida| CURRENT
+
+CURRENT --> SUB
+CURRENT --> ACT
+CURRENT --> ORQ
+
+SUB -->|Entrega reemplazada| CONFLICT
+ORQ -->|Evaluacion obsoleta| CONFLICT
+ACT -->|Rubrica correspondiente| LOAD
+
+LOAD --> GRADE
+GRADE --> GRADINGDB
+GRADINGDB -->|Nota provisional y confianza| EVID
+
+EVID --> EVIDENCE
+EVIDENCE --> CHECK
+
+CHECK -->|Resultado consultable| REVIEWOK
+CHECK -->|Evaluacion inconclusa| INCONCLUSIVE
+
+REVIEW -->|Correccion docente| ADJUST
+ADJUST -->|Correccion invalida| BAD
+ADJUST -->|Correccion justificada| SAVE
+SAVE --> REVIEWDB
+REVIEWDB --> ADJUSTED
+
+REVIEW -->|Solicitud de aprobacion| APPROVE
+APPROVE --> REVIEWDB
+APPROVE -->|Sin revision suficiente| INCONCLUSIVE
+APPROVE -->|Revision valida| REVIEWDB
+REVIEWDB --> APPROVED
+
+REVIEW -->|Solicitud de publicacion| PUBLISH
+PUBLISH --> AUTH
+PUBLISH --> ORQ
+PUBLISH --> SUB
+PUBLISH --> REVIEWDB
+
+PUBLISH -->|Version obsoleta| CONFLICT
+PUBLISH -->|Aprobacion valida| HISTORY
+
+HISTORY --> GRADEDB
+HISTORY --> OFFICIAL
+OFFICIAL --> GRADEDB
+GRADEDB --> PUBLISHED
+
+PUBLISHED --> NOTIF
+
+REVIEW -->|Consulta estudiante| READ
+READ --> AUTH
+AUTH -->|Acceso permitido| GRADEDB
+GRADEDB -->|Ultima nota publicada| OK
+
+REVIEW -->|Consulta de recalificacion| REGRADING
+REGRADING --> ORQ
+REGRADING --> GRADEDB
+REGRADING --> PENDING
+
+REVIEWOK --> GW
+ADJUSTED --> GW
+APPROVED --> GW
+PUBLISHED --> GW
+OK --> GW
+PENDING --> GW
+BAD --> GW
+UNAUTH --> GW
+FORBIDDEN --> GW
+NOTFOUND --> GW
+CONFLICT --> GW
+INCONCLUSIVE --> GW
+
